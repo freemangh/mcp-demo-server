@@ -11,6 +11,7 @@ import urllib.error
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 # Constants
+DEFAULT_MODE = 'tcp'
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8080
 DEFAULT_MAX_BYTES = 4096
@@ -153,29 +154,40 @@ def main():
     """
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='MCP Demo Server (Python)')
+    parser.add_argument('--mode', type=str, default=DEFAULT_MODE, choices=['stdio', 'tcp'],
+                        help=f'Transport mode: stdio or tcp (default: {DEFAULT_MODE})')
     parser.add_argument('--host', type=str, default=DEFAULT_HOST,
-                        help=f'Host address to bind to (default: {DEFAULT_HOST})')
+                        help=f'Host address to bind to for TCP mode (default: {DEFAULT_HOST})')
     parser.add_argument('--port', type=int, default=DEFAULT_PORT,
-                        help=f'Port to listen on (default: {DEFAULT_PORT})')
+                        help=f'Port to listen on for TCP mode (default: {DEFAULT_PORT})')
     args = parser.parse_args()
 
-    # Create a new MCP server instance
-    server = mcp.Server(host=args.host, port=args.port)
+    if args.mode == 'stdio':
+        logging.info("mcp-server-demo-python running in stdio mode")
+        logging.info("Note: stdio mode requires MCP SDK integration (not implemented in this demo)")
+        logging.info("Falling back to TCP mode for now...")
+        logging.warning("Full stdio support will be added in a future update")
+        # For now, fall back to TCP
+        args.mode = 'tcp'
 
-    # Register our tool handlers
-    server.register("echotest", handle_echotest)
-    server.register("timeserver", handle_timeserver)
-    server.register("fetch", handle_fetch)
+    if args.mode == 'tcp':
+        # Create a new MCP server instance for TCP transport
+        server = mcp.Server(host=args.host, port=args.port)
 
-    logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port}")
-    logging.info(f"Registered tools: echotest, timeserver, fetch")
+        # Register our tool handlers
+        server.register("echotest", handle_echotest)
+        server.register("timeserver", handle_timeserver)
+        server.register("fetch", handle_fetch)
 
-    try:
-        # Start the server
-        server.serve_forever()
-    except KeyboardInterrupt:
-        logging.info("Server shutting down.")
-        server.shutdown()
+        logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port} (TCP)")
+        logging.info(f"Registered tools: echotest, timeserver, fetch")
+
+        try:
+            # Start the server
+            server.serve_forever()
+        except KeyboardInterrupt:
+            logging.info("Server shutting down.")
+            server.shutdown()
 
 if __name__ == "__main__":
     main()

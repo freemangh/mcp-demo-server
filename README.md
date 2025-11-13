@@ -16,6 +16,20 @@ Each server exposes the following tools for testing the MCP protocol:
 -   **`echotest`**: Echoes back the provided message
 -   **`timeserver`**: Returns the current time with optional IANA timezone support (e.g., "Europe/Kyiv", "America/New_York")
 -   **`fetch`**: Fetches content from any HTTP/HTTPS URL with optional size limit
+
+## CLI Alignment
+
+Both servers support consistent command-line arguments:
+
+| Argument | Go Server | Python Server | Description |
+|----------|-----------|---------------|-------------|
+| `--mode` | `stdio` \| `http` | `stdio` \| `tcp` | Transport mode |
+| `--host` | default: `0.0.0.0` | default: `0.0.0.0` | Bind address |
+| `--port` | default: `8080` | default: `8080` | Listen port |
+
+**Transport Modes:**
+- **Go**: `stdio` (default, local) or `http` (HTTP/SSE for network)
+- **Python**: `tcp` (default, network) or `stdio` (planned)
     
 
 ## Testing Client: `mcp-cli`
@@ -167,16 +181,23 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
 
 4.  **Run the Server:**
 
-    **Default (listen on all interfaces, port 8080):**
+    **TCP mode (default - network access):**
     ```bash
     python3 mcp_server.py
-    # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080
+    # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080 (TCP)
     ```
 
-    **Custom host/port:**
+    **TCP mode with custom host/port:**
     ```bash
-    python3 mcp_server.py --host 127.0.0.1 --port 9000
-    # Output: INFO - mcp-server-demo-python listening on 127.0.0.1:9000
+    python3 mcp_server.py --mode=tcp --host=127.0.0.1 --port=9000
+    # Output: INFO - mcp-server-demo-python listening on 127.0.0.1:9000 (TCP)
+    ```
+
+    **Stdio mode (for local use):**
+    ```bash
+    python3 mcp_server.py --mode=stdio
+    # Note: stdio mode support is planned for future release
+    # Currently falls back to TCP mode
     ```
     
 
