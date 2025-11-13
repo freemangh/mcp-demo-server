@@ -23,13 +23,13 @@ Both servers support consistent command-line arguments:
 
 | Argument | Go Server | Python Server | Description |
 |----------|-----------|---------------|-------------|
-| `--mode` | `stdio` \| `http` | `stdio` \| `tcp` | Transport mode |
+| `--mode` | `stdio` \| `http` | `stdio` \| `http` | Transport mode |
 | `--host` | default: `0.0.0.0` | default: `0.0.0.0` | Bind address |
 | `--port` | default: `8080` | default: `8080` | Listen port |
 
 **Transport Modes:**
 - **Go**: `stdio` (default, local) or `http` (HTTP/SSE for network)
-- **Python**: `tcp` (default, network) or `stdio` (planned)
+- **Python**: `stdio` (default, local) or `http` (HTTP/SSE for network)
     
 
 ## Testing Client: `mcp-cli`
@@ -181,52 +181,46 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
 
 4.  **Run the Server:**
 
-    **TCP mode (default - network access):**
+    **Stdio mode (default):**
     ```bash
     python3 mcp_server.py
-    # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080 (TCP)
+    # Output: INFO - mcp-server-demo-python running in stdio mode
     ```
 
-    **TCP mode with custom host/port:**
+    **HTTP/SSE mode (for network access):**
     ```bash
-    python3 mcp_server.py --mode=tcp --host=127.0.0.1 --port=9000
-    # Output: INFO - mcp-server-demo-python listening on 127.0.0.1:9000 (TCP)
-    ```
-
-    **Stdio mode (for local use):**
-    ```bash
-    python3 mcp_server.py --mode=stdio
-    # Note: stdio mode support is planned for future release
-    # Currently falls back to TCP mode
+    python3 mcp_server.py --mode=http --host=0.0.0.0 --port=8080
+    # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080 (HTTP/SSE)
     ```
     
 
 ### Test (Locally)
 
-The Python server uses TCP socket transport. Use an MCP-compatible client to test:
+**For HTTP/SSE mode:**
 
-**Example test commands** (using mcp-cli or similar):
+The server exposes an SSE endpoint at `/sse` for MCP protocol communication. You can verify the server is running:
 
-1.  **Test `echotest` tool:**
-    ```bash
-    mcp-cli call localhost:8080 echotest '{"message":"Hello from Python!"}'
-    # Expected: Hello from Python!
-    ```
+```bash
+curl -I http://localhost:8080/sse
+# Should return 200 OK with SSE headers
+```
 
-2.  **Test `timeserver` tool:**
-    ```bash
-    mcp-cli call localhost:8080 timeserver '{}'
-    # Expected: Current time with local timezone
+To interact with the MCP server, use an MCP-compatible client that supports SSE transport, such as:
+- The official MCP SDKs (Python, TypeScript, Go)
+- Custom clients implementing the [MCP SSE transport specification](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports)
 
-    mcp-cli call localhost:8080 timeserver '{"timezone":"Europe/Kyiv"}'
-    # Expected: Current time in Europe/Kyiv timezone
-    ```
+**Example with MCP Python SDK:**
+```python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
 
-3.  **Test `fetch` tool:**
-    ```bash
-    mcp-cli call localhost:8080 fetch '{"url":"https://ifconfig.co/json","max_bytes":1024}'
-    # Expected: JSON response from ifconfig.co
-    ```
+async with sse_client("http://localhost:8080/sse") as (read, write):
+    async with ClientSession(read, write) as session:
+        result = await session.call_tool("timeserver", arguments={})
+        print(result)
+```
+
+**For stdio mode:** Use with MCP clients that support stdio transport (like the official mcp-cli with command transport)
     
 
 ### Dockerize
@@ -238,12 +232,27 @@ The Python server uses TCP socket transport. Use an MCP-compatible client to tes
     docker build -t mcp-server-demo-python:latest .
     ```
 
-2.  **Run the Docker Container:**
+2.  **Run the Docker Container (HTTP/SSE mode - default):**
 
     ```bash
     docker run -d -p 8080:8080 --name py-mcp mcp-server-demo-python:latest
+    # Server runs in HTTP/SSE mode by default in Docker
     ```
 
-3.  **Test** the container using the same `mcp-cli` commands.
+3.  **Verify the container is running:**
 
-4.  **Stop/Remove:** `docker stop py-mcp && docker rm py-mcp`
+    ```bash
+    docker logs py-mcp
+    # Should show: mcp-server-demo-python listening on 0.0.0.0:8080 (HTTP/SSE)
+
+    curl -I http://localhost:8080/sse
+    # Should return 200 OK
+    ```
+
+4.  **Run in stdio mode (if needed):**
+
+    ```bash
+    docker run -it --name py-mcp mcp-server-demo-python:latest --mode=stdio
+    ```
+
+5.  **Stop/Remove:** `docker stop py-mcp && docker rm py-mcp`
