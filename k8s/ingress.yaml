@@ -1,0 +1,72 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-servers-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Increase timeout for SSE connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mcp-demo.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /go
+        pathType: Prefix
+        backend:
+          service:
+            name: mcp-server-demo-go
+            port:
+              number: 8080
+      - path: /python
+        pathType: Prefix
+        backend:
+          service:
+            name: mcp-server-demo-python
+            port:
+              number: 8080
+---
+# Alternative: Separate Ingress for each server
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-go-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mcp-go.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mcp-server-demo-go
+            port:
+              number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-python-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mcp-python.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mcp-server-demo-python
+            port:
+              number: 8080
