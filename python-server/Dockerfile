@@ -18,5 +18,6 @@ EXPOSE 8080
 
 # The command to run when the container starts
 # -u flag ensures Python output is unbuffered (good for logs)
-CMD ["python3", "-u", "mcp_server.py"]
+# Default: TCP mode on 0.0.0.0:8080
+CMD ["python3", "-u", "mcp_server.py", "--mode=tcp", "--host=0.0.0.0", "--port=8080"]
 
