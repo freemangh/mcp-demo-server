@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM golang:1.22-alpine AS build
+FROM golang:1.23-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -13,4 +13,6 @@ FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=build /out/mcp-demo-server /mcp-demo-server
 USER 65532:65532
+EXPOSE 8080
 ENTRYPOINT ["/mcp-demo-server"]
+CMD ["--mode=http", "--host=0.0.0.0", "--port=8080"]
