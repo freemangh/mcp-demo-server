@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server-demo-go
+  labels:
+    app: mcp-server-demo-go
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mcp-server-demo-go
+  template:
+    metadata:
+      labels:
+        app: mcp-server-demo-go
+        version: v1
+    spec:
+      containers:
+      - name: mcp-server
+        image: mcp-server-demo-go:latest
+        imagePullPolicy: IfNotPresent
+        args:
+        - "--mode=http"
+        - "--host=0.0.0.0"
+        - "--port=8080"
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /sse
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /sse
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server-demo-go
+  labels:
+    app: mcp-server-demo-go
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: mcp-server-demo-go

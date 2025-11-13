@@ -20,6 +20,10 @@ mcp-demo-server/
 │   └── cmd/
 │       └── testclient/         # MCP test client (Python)
 │           └── testclient.py   # Test client code
+├── k8s/                        # Kubernetes manifests
+│   ├── go-server-deployment.yaml      # Go server Deployment & Service
+│   ├── python-server-deployment.yaml  # Python server Deployment & Service
+│   └── ingress.yaml            # Optional Ingress configuration
 └── README.md                   # This file
 ```
 
@@ -323,3 +327,435 @@ async with sse_client("http://localhost:8080/sse") as (read, write):
     ```
 
 5.  **Stop/Remove:** `docker stop py-mcp && docker rm py-mcp`
+
+## 3. Production Deployment
+
+This section covers building production-ready Docker images and deploying to Kubernetes.
+
+### Docker Image Build for Production
+
+#### Building and Tagging Images
+
+For production deployments, it's recommended to use semantic versioning and push images to a container registry.
+
+**Go Server:**
+
+```bash
+cd go-server
+
+# Build with version tag
+VERSION=v1.0.0
+docker build -t mcp-server-demo-go:${VERSION} -t mcp-server-demo-go:latest .
+
+# Tag for your container registry (replace with your registry)
+# For Docker Hub:
+docker tag mcp-server-demo-go:${VERSION} yourusername/mcp-server-demo-go:${VERSION}
+docker tag mcp-server-demo-go:latest yourusername/mcp-server-demo-go:latest
+
+# For Google Container Registry (GCR):
+docker tag mcp-server-demo-go:${VERSION} gcr.io/your-project-id/mcp-server-demo-go:${VERSION}
+docker tag mcp-server-demo-go:latest gcr.io/your-project-id/mcp-server-demo-go:latest
+
+# For Amazon ECR:
+docker tag mcp-server-demo-go:${VERSION} 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:${VERSION}
+docker tag mcp-server-demo-go:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:latest
+```
+
+**Python Server:**
+
+```bash
+cd python-server
+
+# Build with version tag
+VERSION=v1.0.0
+docker build -t mcp-server-demo-python:${VERSION} -t mcp-server-demo-python:latest .
+
+# Tag for your container registry (replace with your registry)
+# For Docker Hub:
+docker tag mcp-server-demo-python:${VERSION} yourusername/mcp-server-demo-python:${VERSION}
+docker tag mcp-server-demo-python:latest yourusername/mcp-server-demo-python:latest
+
+# For Google Container Registry (GCR):
+docker tag mcp-server-demo-python:${VERSION} gcr.io/your-project-id/mcp-server-demo-python:${VERSION}
+docker tag mcp-server-demo-python:latest gcr.io/your-project-id/mcp-server-demo-python:latest
+
+# For Amazon ECR:
+docker tag mcp-server-demo-python:${VERSION} 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:${VERSION}
+docker tag mcp-server-demo-python:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:latest
+```
+
+#### Pushing to Container Registry
+
+**Docker Hub:**
+
+```bash
+# Login to Docker Hub
+docker login
+
+# Push images
+docker push yourusername/mcp-server-demo-go:v1.0.0
+docker push yourusername/mcp-server-demo-go:latest
+docker push yourusername/mcp-server-demo-python:v1.0.0
+docker push yourusername/mcp-server-demo-python:latest
+```
+
+**Google Container Registry (GCR):**
+
+```bash
+# Authenticate with GCR
+gcloud auth configure-docker
+
+# Push images
+docker push gcr.io/your-project-id/mcp-server-demo-go:v1.0.0
+docker push gcr.io/your-project-id/mcp-server-demo-go:latest
+docker push gcr.io/your-project-id/mcp-server-demo-python:v1.0.0
+docker push gcr.io/your-project-id/mcp-server-demo-python:latest
+```
+
+**Amazon ECR:**
+
+```bash
+# Authenticate with ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+# Create repositories if they don't exist
+aws ecr create-repository --repository-name mcp-server-demo-go --region us-east-1
+aws ecr create-repository --repository-name mcp-server-demo-python --region us-east-1
+
+# Push images
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:latest
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:latest
+```
+
+### Kubernetes Deployment
+
+This project includes ready-to-use Kubernetes manifests in the `k8s/` directory.
+
+#### Prerequisites
+
+1. **Kubernetes cluster** - You can use:
+   - Local: Minikube, Kind, Docker Desktop with Kubernetes
+   - Cloud: GKE, EKS, AKS, or any other Kubernetes cluster
+
+2. **kubectl** - Kubernetes CLI tool configured to access your cluster
+
+3. **Container images** - Either:
+   - Use local images (for Minikube/Kind with `imagePullPolicy: IfNotPresent`)
+   - Push images to a registry and update image references in manifests
+
+#### Deployment Manifests Overview
+
+The `k8s/` directory contains:
+
+- `go-server-deployment.yaml` - Go server Deployment and Service
+- `python-server-deployment.yaml` - Python server Deployment and Service
+- `ingress.yaml` - Optional Ingress for external access
+
+Each deployment includes:
+- **2 replicas** for high availability
+- **Health checks** (liveness and readiness probes)
+- **Resource limits** (CPU and memory)
+- **Security context** (non-root user, dropped capabilities)
+- **ClusterIP Service** for internal cluster communication
+
+#### Step-by-Step Deployment
+
+**1. Prepare your cluster:**
+
+For local testing with Minikube:
+```bash
+# Start Minikube
+minikube start
+
+# Load local images into Minikube (if not using a registry)
+minikube image load mcp-server-demo-go:latest
+minikube image load mcp-server-demo-python:latest
+```
+
+For Kind:
+```bash
+# Create Kind cluster
+kind create cluster --name mcp-demo
+
+# Load local images into Kind (if not using a registry)
+kind load docker-image mcp-server-demo-go:latest --name mcp-demo
+kind load docker-image mcp-server-demo-python:latest --name mcp-demo
+```
+
+**2. Update image references (if using a registry):**
+
+Edit the manifest files to use your registry images:
+
+```bash
+# For go-server-deployment.yaml, change:
+# image: mcp-server-demo-go:latest
+# to:
+# image: yourusername/mcp-server-demo-go:v1.0.0
+
+# For python-server-deployment.yaml, change:
+# image: mcp-server-demo-python:latest
+# to:
+# image: yourusername/mcp-server-demo-python:v1.0.0
+```
+
+Or use `sed` to update:
+```bash
+cd k8s
+sed -i 's|mcp-server-demo-go:latest|yourusername/mcp-server-demo-go:v1.0.0|g' go-server-deployment.yaml
+sed -i 's|mcp-server-demo-python:latest|yourusername/mcp-server-demo-python:v1.0.0|g' python-server-deployment.yaml
+```
+
+**3. Deploy to Kubernetes:**
+
+```bash
+# Deploy Go server
+kubectl apply -f k8s/go-server-deployment.yaml
+
+# Deploy Python server
+kubectl apply -f k8s/python-server-deployment.yaml
+
+# Optional: Deploy Ingress (requires Ingress controller)
+kubectl apply -f k8s/ingress.yaml
+```
+
+**4. Verify deployments:**
+
+```bash
+# Check deployment status
+kubectl get deployments
+kubectl get pods
+kubectl get services
+
+# Wait for pods to be ready
+kubectl wait --for=condition=ready pod -l app=mcp-server-demo-go --timeout=60s
+kubectl wait --for=condition=ready pod -l app=mcp-server-demo-python --timeout=60s
+
+# Check pod logs
+kubectl logs -l app=mcp-server-demo-go
+kubectl logs -l app=mcp-server-demo-python
+```
+
+Expected output:
+```
+NAME                                    READY   STATUS    RESTARTS   AGE
+mcp-server-demo-go-xxxxxxxxxx-xxxxx     1/1     Running   0          30s
+mcp-server-demo-go-xxxxxxxxxx-xxxxx     1/1     Running   0          30s
+mcp-server-demo-python-xxxxxxxxxx-xxxx  1/1     Running   0          30s
+mcp-server-demo-python-xxxxxxxxxx-xxxx  1/1     Running   0          30s
+```
+
+#### Testing Kubernetes Deployments
+
+**Method 1: Port Forwarding (Quick Test)**
+
+```bash
+# Forward Go server port
+kubectl port-forward svc/mcp-server-demo-go 8080:8080
+
+# In another terminal, test the server
+curl -I http://localhost:8080/sse
+# Should return 200 OK
+
+# Test with built-in test client
+cd go-server
+./testclient -tool timeserver -args '{}' -url http://localhost:8080/sse
+
+# Forward Python server port (use a different local port)
+kubectl port-forward svc/mcp-server-demo-python 8081:8080
+
+# Test Python server
+curl -I http://localhost:8081/sse
+cd python-server
+python3 cmd/testclient/testclient.py -tool timeserver -args '{}' -url http://localhost:8081/sse
+```
+
+**Method 2: From within the cluster (create a test pod)**
+
+```bash
+# Create a temporary test pod
+kubectl run test-client --image=curlimages/curl:latest -it --rm --restart=Never -- sh
+
+# Inside the pod, test the services
+curl -I http://mcp-server-demo-go:8080/sse
+curl -I http://mcp-server-demo-python:8080/sse
+```
+
+**Method 3: Using Ingress (External Access)**
+
+If you deployed the Ingress:
+
+```bash
+# Get Ingress address
+kubectl get ingress
+
+# For Minikube, enable Ingress addon
+minikube addons enable ingress
+
+# Get Minikube IP
+minikube ip
+
+# Test with Ingress (update /etc/hosts to point domain to Minikube IP)
+# Add line: <minikube-ip> mcp-demo.example.com mcp-go.example.com mcp-python.example.com
+curl -I http://mcp-go.example.com/sse
+curl -I http://mcp-python.example.com/sse
+
+# Or use the test clients
+./testclient -tool timeserver -args '{}' -url http://mcp-go.example.com/sse
+```
+
+**Method 4: Interactive Testing**
+
+```bash
+# Port forward and use interactive mode
+kubectl port-forward svc/mcp-server-demo-go 8080:8080
+
+# In another terminal
+cd go-server
+./testclient -i -url http://localhost:8080/sse
+
+# Interactive commands:
+mcp> list
+mcp> echo Hello from Kubernetes!
+mcp> time Europe/Kyiv
+mcp> fetch https://ifconfig.co/json 1024
+```
+
+#### Health Checks and Monitoring
+
+**Check pod health:**
+
+```bash
+# View pod status and ready state
+kubectl get pods -l app=mcp-server-demo-go -o wide
+kubectl get pods -l app=mcp-server-demo-python -o wide
+
+# Describe pod to see health check results
+kubectl describe pod -l app=mcp-server-demo-go | grep -A 5 "Liveness\|Readiness"
+
+# View events
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+**Check resource usage:**
+
+```bash
+# View resource consumption
+kubectl top pods -l app=mcp-server-demo-go
+kubectl top pods -l app=mcp-server-demo-python
+
+# View resource limits
+kubectl describe deployment mcp-server-demo-go | grep -A 5 "Limits\|Requests"
+```
+
+#### Scaling Deployments
+
+```bash
+# Scale Go server to 3 replicas
+kubectl scale deployment mcp-server-demo-go --replicas=3
+
+# Scale Python server to 3 replicas
+kubectl scale deployment mcp-server-demo-python --replicas=3
+
+# Verify scaling
+kubectl get pods -l app=mcp-server-demo-go
+kubectl get pods -l app=mcp-server-demo-python
+
+# Auto-scaling (HPA - requires metrics-server)
+kubectl autoscale deployment mcp-server-demo-go --cpu-percent=70 --min=2 --max=10
+kubectl autoscale deployment mcp-server-demo-python --cpu-percent=70 --min=2 --max=10
+```
+
+#### Updating Deployments
+
+```bash
+# Update to a new version
+kubectl set image deployment/mcp-server-demo-go mcp-server=yourusername/mcp-server-demo-go:v1.1.0
+kubectl set image deployment/mcp-server-demo-python mcp-server=yourusername/mcp-server-demo-python:v1.1.0
+
+# Check rollout status
+kubectl rollout status deployment/mcp-server-demo-go
+kubectl rollout status deployment/mcp-server-demo-python
+
+# Rollback if needed
+kubectl rollout undo deployment/mcp-server-demo-go
+kubectl rollout undo deployment/mcp-server-demo-python
+
+# View rollout history
+kubectl rollout history deployment/mcp-server-demo-go
+```
+
+#### Troubleshooting
+
+**Pods not starting:**
+
+```bash
+# Check pod status
+kubectl get pods -l app=mcp-server-demo-go
+
+# View pod events and logs
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
+
+# Common issues:
+# - Image pull errors: Check image name and registry authentication
+# - CrashLoopBackOff: Check logs for application errors
+# - Pending: Check resource availability (CPU/memory)
+```
+
+**Health checks failing:**
+
+```bash
+# Check endpoint manually from within cluster
+kubectl run test --image=curlimages/curl -it --rm --restart=Never -- curl -I http://mcp-server-demo-go:8080/sse
+
+# Adjust health check timing if needed (edit deployment)
+kubectl edit deployment mcp-server-demo-go
+# Increase initialDelaySeconds or failureThreshold
+```
+
+**Service not accessible:**
+
+```bash
+# Verify service endpoints
+kubectl get endpoints mcp-server-demo-go
+
+# Check if pods are ready
+kubectl get pods -l app=mcp-server-demo-go
+
+# Test service from within cluster
+kubectl run test --image=curlimages/curl -it --rm --restart=Never -- curl http://mcp-server-demo-go:8080/sse
+```
+
+#### Cleanup
+
+```bash
+# Delete all resources
+kubectl delete -f k8s/go-server-deployment.yaml
+kubectl delete -f k8s/python-server-deployment.yaml
+kubectl delete -f k8s/ingress.yaml
+
+# Or delete by label
+kubectl delete all -l app=mcp-server-demo-go
+kubectl delete all -l app=mcp-server-demo-python
+
+# Delete Minikube cluster (if used)
+minikube delete
+
+# Delete Kind cluster (if used)
+kind delete cluster --name mcp-demo
+```
+
+### Production Best Practices
+
+1. **Use specific version tags** instead of `latest` in production
+2. **Enable resource limits** to prevent resource exhaustion
+3. **Configure horizontal pod autoscaling** based on metrics
+4. **Set up monitoring** with Prometheus/Grafana
+5. **Configure logging** with ELK stack or cloud-native solutions
+6. **Use secrets management** for sensitive configuration
+7. **Implement network policies** to restrict traffic
+8. **Regular security updates** - rebuild images with updated base images
+9. **Backup configurations** - store manifests in version control
+10. **Test rollback procedures** before production deployment
