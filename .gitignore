@@ -10,7 +10,9 @@
 mcp-demo-server
 mcp-server-demo-go
 mcp-server-demo-python
-testclient
+/go-server/testclient
+!/go-server/cmd/testclient/
+!/python-server/cmd/testclient/
 
 # Test binary, built with `go test -c`
 *.test

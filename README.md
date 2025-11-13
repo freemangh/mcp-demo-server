@@ -11,12 +11,15 @@ mcp-demo-server/
 │   ├── go.mod                  # Go dependencies
 │   ├── Dockerfile              # Docker build file
 │   └── cmd/
-│       └── testclient/         # MCP test client
+│       └── testclient/         # MCP test client (Go)
 │           └── main.go         # Test client code
 ├── python-server/              # Python implementation
 │   ├── mcp_server.py           # Server code
 │   ├── requirements.txt        # Python dependencies
-│   └── Dockerfile              # Docker build file
+│   ├── Dockerfile              # Docker build file
+│   └── cmd/
+│       └── testclient/         # MCP test client (Python)
+│           └── testclient.py   # Test client code
 └── README.md                   # This file
 ```
 
@@ -45,43 +48,59 @@ Both servers support consistent command-line arguments:
 
 Because these servers use the real MCP protocol, you need an MCP client to test them. You have two options:
 
-### Option 1: Built-in Test Client (Recommended)
+### Option 1: Built-in Test Clients (Recommended)
 
-This repository includes a test client in `go-server/cmd/testclient/` that supports both Go and Python servers.
+This repository includes test clients in both Go and Python that support both servers.
 
-**Build the test client:**
+#### Go Test Client
+
+**Build:**
 ```bash
 cd go-server
 go build -o testclient ./cmd/testclient
 ```
 
 **Usage:**
-
-Single command mode:
 ```bash
-# Test echotest tool
+# Single command mode
 ./testclient -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/sse
-
-# Test timeserver tool
-./testclient -tool timeserver -args '{}' -url http://localhost:8080/sse
 ./testclient -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/sse
-
-# Test fetch tool
 ./testclient -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/sse
-```
 
-Interactive mode:
-```bash
+# Interactive mode
 ./testclient -i -url http://localhost:8080/sse
 ```
 
-In interactive mode, you can use these commands:
-- `help` - Show available commands
-- `list` - List available tools on the server
+#### Python Test Client
+
+**Setup:**
+```bash
+cd python-server
+# Ensure dependencies are installed (mcp package required)
+source venv/bin/activate  # if using venv
+pip install -r requirements.txt
+```
+
+**Usage:**
+```bash
+# Single command mode
+python3 cmd/testclient/testclient.py -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/sse
+python3 cmd/testclient/testclient.py -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/sse
+python3 cmd/testclient/testclient.py -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/sse
+
+# Interactive mode
+python3 cmd/testclient/testclient.py -i -url http://localhost:8080/sse
+```
+
+#### Interactive Mode Commands
+
+Both clients support the same interactive commands:
+- `help`, `h`, `?` - Show available commands
+- `list`, `ls` - List available tools on the server
 - `echo <message>` - Test echotest tool
 - `time [timezone]` - Test timeserver tool
 - `fetch <url> [max_bytes]` - Test fetch tool
-- `quit` - Exit
+- `quit`, `exit`, `q` - Exit
 
 ### Option 2: Official `mcp-cli`
 
