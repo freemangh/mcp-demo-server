@@ -6,9 +6,18 @@ This project provides two simple MCP servers (in Go and Python) using the offici
 
 ```
 mcp-demo-server/
-├── go-server/        # Go implementation
-├── python-server/    # Python implementation
-└── README.md         # This file
+├── go-server/                  # Go implementation
+│   ├── main.go                 # Server code
+│   ├── go.mod                  # Go dependencies
+│   ├── Dockerfile              # Docker build file
+│   └── cmd/
+│       └── testclient/         # MCP test client
+│           └── main.go         # Test client code
+├── python-server/              # Python implementation
+│   ├── mcp_server.py           # Server code
+│   ├── requirements.txt        # Python dependencies
+│   └── Dockerfile              # Docker build file
+└── README.md                   # This file
 ```
 
 Each server exposes the following tools for testing the MCP protocol:
@@ -32,15 +41,54 @@ Both servers support consistent command-line arguments:
 - **Python**: `stdio` (default, local) or `http` (HTTP/SSE for network)
     
 
-## Testing Client: `mcp-cli`
+## Testing Clients
 
-Because these servers now use the real MCP protocol, you can't test them with `netcat` anymore. You must use an MCP client. The official `mcp-cli` is perfect for this.
+Because these servers use the real MCP protocol, you need an MCP client to test them. You have two options:
 
-**Install `mcp-cli` (one time):**
+### Option 1: Built-in Test Client (Recommended)
 
+This repository includes a test client in `go-server/cmd/testclient/` that supports both Go and Python servers.
+
+**Build the test client:**
+```bash
+cd go-server
+go build -o testclient ./cmd/testclient
 ```
-go install [github.com/modelcontextprotocol/mcp-cli@latest](https://github.com/modelcontextprotocol/mcp-cli@latest)
 
+**Usage:**
+
+Single command mode:
+```bash
+# Test echotest tool
+./testclient -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/sse
+
+# Test timeserver tool
+./testclient -tool timeserver -args '{}' -url http://localhost:8080/sse
+./testclient -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/sse
+
+# Test fetch tool
+./testclient -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/sse
+```
+
+Interactive mode:
+```bash
+./testclient -i -url http://localhost:8080/sse
+```
+
+In interactive mode, you can use these commands:
+- `help` - Show available commands
+- `list` - List available tools on the server
+- `echo <message>` - Test echotest tool
+- `time [timezone]` - Test timeserver tool
+- `fetch <url> [max_bytes]` - Test fetch tool
+- `quit` - Exit
+
+### Option 2: Official `mcp-cli`
+
+You can also use the official MCP CLI tool:
+
+```bash
+go install github.com/modelcontextprotocol/mcp-cli@latest
 ```
 
 (Ensure your Go bin directory, e.g., `~/go/bin`, is in your `$PATH`)
