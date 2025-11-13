@@ -1,0 +1,111 @@
+# Default values for mcp-server-python
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: mcp-server-demo-python
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # Increase timeout for SSE connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: mcp-python.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: mcp-python-tls
+  #    hosts:
+  #      - mcp-python.example.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application-specific configuration
+config:
+  # Server mode: http or stdio
+  mode: http
+  # Host to bind to
+  host: "0.0.0.0"
+  # Port to listen on
+  port: 8080
+
+# Liveness probe configuration
+livenessProbe:
+  httpGet:
+    path: /sse
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Readiness probe configuration
+readinessProbe:
+  httpGet:
+    path: /sse
+    port: 8080
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 2

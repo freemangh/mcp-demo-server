@@ -1,0 +1,17 @@
+apiVersion: v2
+name: mcp-server-python
+description: A Helm chart for MCP (Model Context Protocol) Demo Server - Python Implementation
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - mcp
+  - model-context-protocol
+  - python
+  - server
+home: https://github.com/freemangh/mcp-demo-server
+sources:
+  - https://github.com/freemangh/mcp-demo-server
+maintainers:
+  - name: Yevhen Khvastunov
+    email: khvastunov@gmail.com
