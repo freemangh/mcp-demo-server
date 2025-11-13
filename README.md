@@ -24,6 +24,15 @@ mcp-demo-server/
 │   ├── go-server-deployment.yaml      # Go server Deployment & Service
 │   ├── python-server-deployment.yaml  # Python server Deployment & Service
 │   └── ingress.yaml            # Optional Ingress configuration
+├── helm/                       # Helm charts
+│   ├── mcp-server-go/          # Go server Helm chart
+│   │   ├── Chart.yaml          # Chart metadata
+│   │   ├── values.yaml         # Default values
+│   │   └── templates/          # Kubernetes templates
+│   └── mcp-server-python/      # Python server Helm chart
+│       ├── Chart.yaml          # Chart metadata
+│       ├── values.yaml         # Default values
+│       └── templates/          # Kubernetes templates
 └── README.md                   # This file
 ```
 
@@ -746,6 +755,354 @@ minikube delete
 # Delete Kind cluster (if used)
 kind delete cluster --name mcp-demo
 ```
+
+### Helm Deployment
+
+This project includes Helm charts for simplified deployment and management of both MCP servers.
+
+#### Prerequisites
+
+1. **Helm 3.x** installed ([Installation guide](https://helm.sh/docs/intro/install/))
+2. **Kubernetes cluster** with kubectl configured
+3. **Container images** built and accessible (local or registry)
+
+#### Helm Charts Overview
+
+The `helm/` directory contains two Helm charts:
+
+- `helm/mcp-server-go/` - Helm chart for Go server
+- `helm/mcp-server-python/` - Helm chart for Python server
+
+Each chart includes:
+- Configurable deployment with replicas, resources, and security contexts
+- Service configuration (ClusterIP, NodePort, LoadBalancer)
+- Optional Ingress with TLS support
+- Optional Horizontal Pod Autoscaler (HPA)
+- Customizable health probes
+- NOTES with post-installation instructions
+
+#### Installing with Helm
+
+**Install Go Server:**
+
+```bash
+# Install with default values (uses local image)
+helm install mcp-go ./helm/mcp-server-go
+
+# Install with custom values
+helm install mcp-go ./helm/mcp-server-go \
+  --set image.repository=yourusername/mcp-server-demo-go \
+  --set image.tag=v1.0.0 \
+  --set replicaCount=3
+
+# Install with Ingress enabled
+helm install mcp-go ./helm/mcp-server-go \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=mcp-go.example.com \
+  --set ingress.hosts[0].paths[0].path=/ \
+  --set ingress.hosts[0].paths[0].pathType=Prefix
+
+# Install with autoscaling enabled
+helm install mcp-go ./helm/mcp-server-go \
+  --set autoscaling.enabled=true \
+  --set autoscaling.minReplicas=2 \
+  --set autoscaling.maxReplicas=10 \
+  --set autoscaling.targetCPUUtilizationPercentage=70
+```
+
+**Install Python Server:**
+
+```bash
+# Install with default values (uses local image)
+helm install mcp-python ./helm/mcp-server-python
+
+# Install with custom values
+helm install mcp-python ./helm/mcp-server-python \
+  --set image.repository=yourusername/mcp-server-demo-python \
+  --set image.tag=v1.0.0 \
+  --set replicaCount=3
+
+# Install with Ingress enabled
+helm install mcp-python ./helm/mcp-server-python \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=mcp-python.example.com \
+  --set ingress.hosts[0].paths[0].path=/ \
+  --set ingress.hosts[0].paths[0].pathType=Prefix
+```
+
+**Install to a specific namespace:**
+
+```bash
+# Create namespace
+kubectl create namespace mcp-servers
+
+# Install both servers to the namespace
+helm install mcp-go ./helm/mcp-server-go -n mcp-servers
+helm install mcp-python ./helm/mcp-server-python -n mcp-servers
+```
+
+#### Using a Custom Values File
+
+Create a custom values file to override defaults:
+
+**custom-values-go.yaml:**
+```yaml
+replicaCount: 3
+
+image:
+  repository: yourusername/mcp-server-demo-go
+  tag: "v1.0.0"
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: mcp-go.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: mcp-go-tls
+      hosts:
+        - mcp-go.example.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+```
+
+**Install with custom values:**
+```bash
+helm install mcp-go ./helm/mcp-server-go -f custom-values-go.yaml
+```
+
+#### Managing Helm Releases
+
+**List installed releases:**
+```bash
+helm list
+helm list -n mcp-servers  # In specific namespace
+```
+
+**Get release status:**
+```bash
+helm status mcp-go
+helm status mcp-python
+```
+
+**Upgrade a release:**
+```bash
+# Upgrade with new image version
+helm upgrade mcp-go ./helm/mcp-server-go \
+  --set image.tag=v1.1.0
+
+# Upgrade with custom values file
+helm upgrade mcp-go ./helm/mcp-server-go -f custom-values-go.yaml
+
+# Upgrade with reuse of previous values
+helm upgrade mcp-go ./helm/mcp-server-go --reuse-values --set replicaCount=5
+```
+
+**Rollback a release:**
+```bash
+# Rollback to previous revision
+helm rollback mcp-go
+
+# Rollback to specific revision
+helm rollback mcp-go 2
+
+# View rollback history
+helm history mcp-go
+```
+
+**Uninstall a release:**
+```bash
+helm uninstall mcp-go
+helm uninstall mcp-python
+
+# Uninstall from specific namespace
+helm uninstall mcp-go -n mcp-servers
+```
+
+#### Testing Helm Deployments
+
+**Dry run (validate without installing):**
+```bash
+helm install mcp-go ./helm/mcp-server-go --dry-run --debug
+```
+
+**Template rendering (see generated manifests):**
+```bash
+helm template mcp-go ./helm/mcp-server-go
+helm template mcp-go ./helm/mcp-server-go -f custom-values-go.yaml
+```
+
+**Lint chart (check for issues):**
+```bash
+helm lint ./helm/mcp-server-go
+helm lint ./helm/mcp-server-python
+```
+
+**Test the deployed application:**
+```bash
+# Port forward to access the service
+kubectl port-forward svc/mcp-go-mcp-server-go 8080:8080
+
+# In another terminal, test with the test client
+cd go-server
+./testclient -i -url http://localhost:8080/sse
+```
+
+#### Packaging and Distributing Helm Charts
+
+**Package charts:**
+```bash
+# Package individual charts
+helm package ./helm/mcp-server-go
+helm package ./helm/mcp-server-python
+
+# This creates mcp-server-go-1.0.0.tgz and mcp-server-python-1.0.0.tgz
+```
+
+**Install from packaged chart:**
+```bash
+helm install mcp-go mcp-server-go-1.0.0.tgz
+```
+
+**Create Helm repository index:**
+```bash
+# Create index file for multiple charts
+helm repo index . --url https://example.com/charts
+
+# This generates index.yaml for hosting as a chart repository
+```
+
+#### Common Helm Values Configurations
+
+**For Production Environments:**
+
+```yaml
+# Production configuration example
+replicaCount: 3
+
+image:
+  repository: your-registry.io/mcp-server-demo-go
+  tag: "v1.0.0"
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: registry-secret
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: mcp-go.prod.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: mcp-go-tls
+      hosts:
+        - mcp-go.prod.example.com
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - mcp-server-go
+          topologyKey: kubernetes.io/hostname
+```
+
+**For Development Environments:**
+
+```yaml
+# Development configuration example
+replicaCount: 1
+
+image:
+  repository: mcp-server-demo-go
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+service:
+  type: NodePort
+
+autoscaling:
+  enabled: false
+```
+
+#### Helm Values Reference
+
+Key configuration options available in `values.yaml`:
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `replicaCount` | Number of replicas | `2` |
+| `image.repository` | Image repository | `mcp-server-demo-go` |
+| `image.tag` | Image tag | `latest` |
+| `image.pullPolicy` | Image pull policy | `IfNotPresent` |
+| `service.type` | Service type | `ClusterIP` |
+| `service.port` | Service port | `8080` |
+| `ingress.enabled` | Enable Ingress | `false` |
+| `ingress.className` | Ingress class | `nginx` |
+| `resources.limits.cpu` | CPU limit | `500m` |
+| `resources.limits.memory` | Memory limit | `128Mi` (Go) / `256Mi` (Python) |
+| `autoscaling.enabled` | Enable HPA | `false` |
+| `autoscaling.minReplicas` | Minimum replicas | `2` |
+| `autoscaling.maxReplicas` | Maximum replicas | `10` |
+| `config.mode` | Server mode | `http` |
+| `config.host` | Bind address | `0.0.0.0` |
+| `config.port` | Server port | `8080` |
+
+For complete values reference, see the `values.yaml` file in each chart directory.
 
 ### Production Best Practices
 
