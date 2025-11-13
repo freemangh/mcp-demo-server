@@ -58,43 +58,44 @@ go install [github.com/modelcontextprotocol/mcp-cli@latest](https://github.com/m
 
 3.  **Run the Server:**
 
+    **Stdio mode (default):**
     ```bash
     go run .
-    # Server: mcp-server-demo-go (uses stdio transport, not TCP)
+    # Server: mcp-server-demo-go running in stdio mode
+    ```
+
+    **HTTP/SSE mode (for network access):**
+    ```bash
+    go run . --mode=http --host=0.0.0.0 --port=8080
+    # Server: mcp-server-demo-go listening on 0.0.0.0:8080 (HTTP/SSE)
     ```
     
 
 ### Test (Locally)
 
-Open a new terminal.
+**For HTTP/SSE mode:**
 
-1.  **Test `echotest`:**
-    
-    ```
-    mcp-cli call localhost:8080 echotest "hello from mcp-cli"
-    
-    ```
-    
-    **Expected Output:**
-    
-    ```
-    hello from mcp-cli
-    
-    ```
-    
-2.  **Test `time_server`:**
-    
-    ```
-    mcp-cli call localhost:8080 time_server
-    
-    ```
-    
-    **Expected Output:** (The time will vary)
-    
-    ```
-    2025-10-29T15:00:00Z
-    
-    ```
+The server exposes an SSE endpoint at `/sse` for MCP protocol communication. You can verify the server is running:
+
+```bash
+curl -I http://localhost:8080/sse
+# Should return 200 OK with SSE headers
+```
+
+To interact with the MCP server, use an MCP-compatible client that supports SSE transport, such as:
+- The official MCP SDKs (Python, TypeScript, Go)
+- Custom clients implementing the [MCP SSE transport specification](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports)
+
+**Example with MCP Python SDK:**
+```python
+from mcp import ClientSession, SSEClientTransport
+
+async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as session:
+    result = await session.call_tool("timeserver", arguments={})
+    print(result)
+```
+
+**For stdio mode:** Use with MCP clients that support stdio transport (like the official mcp-cli with command transport)
     
 
 ### Dockerize
@@ -106,15 +107,30 @@ Open a new terminal.
     docker build -t mcp-server-demo-go:latest .
     ```
 
-2.  **Run the Docker Container:**
+2.  **Run the Docker Container (HTTP/SSE mode - default):**
 
     ```bash
-    docker run -it --name go-mcp mcp-server-demo-go:latest
+    docker run -d -p 8080:8080 --name go-mcp mcp-server-demo-go:latest
+    # Server runs in HTTP/SSE mode by default in Docker
     ```
 
-3.  **Test** the container using the same `mcp-cli` commands.
+3.  **Verify the container is running:**
 
-4.  **Stop/Remove:** `docker stop go-mcp && docker rm go-mcp`
+    ```bash
+    docker logs go-mcp
+    # Should show: mcp-server-demo-go listening on 0.0.0.0:8080 (HTTP/SSE)
+
+    curl -I http://localhost:8080/sse
+    # Should return 200 OK
+    ```
+
+4.  **Run in stdio mode (if needed):**
+
+    ```bash
+    docker run -it --name go-mcp mcp-server-demo-go:latest --mode=stdio
+    ```
+
+5.  **Stop/Remove:** `docker stop go-mcp && docker rm go-mcp`
     
 
 ## 2. Python Server

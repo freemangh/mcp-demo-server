@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -154,6 +155,12 @@ func FetchGoogleTool(ctx context.Context, req *mcp.CallToolRequest, in FetchArgs
 /* ---------- main ---------- */
 
 func main() {
+	// Command-line flags
+	mode := flag.String("mode", "stdio", "Transport mode: stdio or http")
+	port := flag.String("port", "8080", "HTTP port for network mode")
+	host := flag.String("host", "0.0.0.0", "Host address to bind to")
+	flag.Parse()
+
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "mcp-server-demo-go",
 		Version: "v0.1.0",
@@ -174,7 +181,31 @@ func main() {
 		Description: "Fetch https://www.google.com/ (HTML). Optional max_bytes and path",
 	}, FetchGoogleTool)
 
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	var err error
+	ctx := context.Background()
+
+	if *mode == "http" {
+		addr := fmt.Sprintf("%s:%s", *host, *port)
+
+		// Create SSE handler for MCP over HTTP
+		handler := mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
+			return server
+		}, nil)
+
+		// Create HTTP server
+		httpServer := &http.Server{
+			Addr:    addr,
+			Handler: handler,
+		}
+
+		log.Printf("mcp-server-demo-go listening on %s (HTTP/SSE)", addr)
+		err = httpServer.ListenAndServe()
+	} else {
+		log.Printf("mcp-server-demo-go running in stdio mode")
+		err = server.Run(ctx, &mcp.StdioTransport{})
+	}
+
+	if err != nil {
 		log.Fatal(err)
 	}
 }
