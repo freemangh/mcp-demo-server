@@ -35,6 +35,19 @@ func clamp(n, lo, hi int) int {
 	return n
 }
 
+/* ---------- Tool: echotest ---------- */
+
+type EchoArgs struct {
+	// Message to echo back
+	Message string `json:"message" jsonschema:"Message to echo back"`
+}
+
+func EchotestTool(ctx context.Context, req *mcp.CallToolRequest, in EchoArgs) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: in.Message}},
+	}, nil, nil
+}
+
 /* ---------- Tool: timeserver ---------- */
 
 type TimeArgs struct {
@@ -73,82 +86,71 @@ func TimeServerTool(ctx context.Context, req *mcp.CallToolRequest, in TimeArgs) 
 	}, nil, nil
 }
 
-/* ---------- Shared fetch helper ---------- */
+/* ---------- Tool: fetch ---------- */
 
 type FetchArgs struct {
+	// URL to fetch
+	URL string `json:"url" jsonschema:"URL to fetch (must be http or https)"`
 	// Max bytes of the response body to return (defaults to 4096, [256..65536]).
 	MaxBytes int `json:"max_bytes,omitempty" jsonschema:"Limit response body bytes (default 4096, min 256, max 65536)"`
-	// Optional path override (e.g. "/" or "/json"); defaults to "/".
-	Path string `json:"path,omitempty" jsonschema:"Optional path override (e.g. / or /json)"`
 }
 
-func fetchURL(ctx context.Context, baseURL string, maxBytes int, path string) (string, error) {
-	if path == "" {
-		path = "/"
-	}
-	url := baseURL
-	if path != "/" {
-		url = baseURL + path
+func FetchTool(ctx context.Context, req *mcp.CallToolRequest, in FetchArgs) (*mcp.CallToolResult, any, error) {
+	// Validate URL
+	if in.URL == "" {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "URL is required"}},
+		}, nil, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
+	// Validate URL scheme
+	if len(in.URL) < 7 || (in.URL[:7] != "http://" && in.URL[:8] != "https://") {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "URL must start with http:// or https://"}},
+		}, nil, nil
 	}
-	req.Header.Set("User-Agent", "mcp-server-demo-go/1.0 (+https://example.local)")
 
-	resp, err := httpClient.Do(req)
+	maxBytes := clamp(in.MaxBytes, minCapBytes, maxCapBytes)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, in.URL, nil)
 	if err != nil {
-		return "", err
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "Invalid URL: " + err.Error()}},
+		}, nil, nil
+	}
+	httpReq.Header.Set("User-Agent", "mcp-server-demo-go/1.0 (+https://example.local)")
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "Fetch error: " + err.Error()}},
+		}, nil, nil
 	}
 	defer resp.Body.Close()
 
 	limited := io.LimitReader(resp.Body, int64(maxBytes))
 	body, err := io.ReadAll(limited)
 	if err != nil {
-		return "", err
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "Read error: " + err.Error()}},
+		}, nil, nil
 	}
 
 	truncatedNote := ""
-	// If content-length unknown or larger than maxBytes, we can't detect strict truncation reliably.
-	// Add a best-effort note when server advertises size.
 	if resp.ContentLength > 0 && resp.ContentLength > int64(maxBytes) {
 		truncatedNote = " (truncated)"
 	}
 
-	return fmt.Sprintf("URL: %s\nStatus: %s\nBytes: %d%s\n\n%s",
-		url, resp.Status, len(body), truncatedNote, string(body)), nil
-}
+	result := fmt.Sprintf("URL: %s\nStatus: %s\nBytes: %d%s\n\n%s",
+		in.URL, resp.Status, len(body), truncatedNote, string(body))
 
-/* ---------- Tool: fetch_ifconfig ---------- */
-
-func FetchIfconfigTool(ctx context.Context, req *mcp.CallToolRequest, in FetchArgs) (*mcp.CallToolResult, any, error) {
-	max := clamp(in.MaxBytes, minCapBytes, maxCapBytes)
-	body, err := fetchURL(ctx, "https://ifconfig.co", max, in.Path)
-	if err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{&mcp.TextContent{Text: "fetch_ifconfig error: " + err.Error()}},
-		}, nil, nil
-	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: body}},
-	}, nil, nil
-}
-
-/* ---------- Tool: fetch_google ---------- */
-
-func FetchGoogleTool(ctx context.Context, req *mcp.CallToolRequest, in FetchArgs) (*mcp.CallToolResult, any, error) {
-	max := clamp(in.MaxBytes, minCapBytes, maxCapBytes)
-	body, err := fetchURL(ctx, "https://www.google.com", max, in.Path)
-	if err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{&mcp.TextContent{Text: "fetch_google error: " + err.Error()}},
-		}, nil, nil
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: body}},
+		Content: []mcp.Content{&mcp.TextContent{Text: result}},
 	}, nil, nil
 }
 
@@ -167,19 +169,19 @@ func main() {
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "echotest",
+		Description: "Echo back the provided message",
+	}, EchotestTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "timeserver",
 		Description: "Return current time; optional IANA tz via timezone arg",
 	}, TimeServerTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "fetch_ifconfig",
-		Description: "Fetch https://ifconfig.co/ (HTML by default). Optional max_bytes and path (e.g. /json)",
-	}, FetchIfconfigTool)
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "fetch_google",
-		Description: "Fetch https://www.google.com/ (HTML). Optional max_bytes and path",
-	}, FetchGoogleTool)
+		Name:        "fetch",
+		Description: "Fetch content from a URL (HTTP/HTTPS). Optional max_bytes to limit response size",
+	}, FetchTool)
 
 	var err error
 	ctx := context.Background()

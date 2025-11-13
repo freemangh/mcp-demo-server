@@ -11,11 +11,11 @@ mcp-demo-server/
 └── README.md         # This file
 ```
 
-Each server exposes tools for testing the MCP protocol:
+Each server exposes the following tools for testing the MCP protocol:
 
--   `time_server`: Returns the current server time in ISO/RFC3339 format.
-
--   `echotest`: Echoes back any data sent to it.
+-   **`echotest`**: Echoes back the provided message
+-   **`timeserver`**: Returns the current time with optional IANA timezone support (e.g., "Europe/Kyiv", "America/New_York")
+-   **`fetch`**: Fetches content from any HTTP/HTTPS URL with optional size limit
     
 
 ## Testing Client: `mcp-cli`
@@ -167,42 +167,44 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
 
 4.  **Run the Server:**
 
+    **Default (listen on all interfaces, port 8080):**
     ```bash
     python3 mcp_server.py
     # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080
+    ```
+
+    **Custom host/port:**
+    ```bash
+    python3 mcp_server.py --host 127.0.0.1 --port 9000
+    # Output: INFO - mcp-server-demo-python listening on 127.0.0.1:9000
     ```
     
 
 ### Test (Locally)
 
-Open a new terminal.
+The Python server uses TCP socket transport. Use an MCP-compatible client to test:
 
-1.  **Test `echotest`:**
-    
+**Example test commands** (using mcp-cli or similar):
+
+1.  **Test `echotest` tool:**
+    ```bash
+    mcp-cli call localhost:8080 echotest '{"message":"Hello from Python!"}'
+    # Expected: Hello from Python!
     ```
-    mcp-cli call localhost:8080 echotest "hello from python"
-    
+
+2.  **Test `timeserver` tool:**
+    ```bash
+    mcp-cli call localhost:8080 timeserver '{}'
+    # Expected: Current time with local timezone
+
+    mcp-cli call localhost:8080 timeserver '{"timezone":"Europe/Kyiv"}'
+    # Expected: Current time in Europe/Kyiv timezone
     ```
-    
-    **Expected Output:**
-    
-    ```
-    hello from python
-    
-    ```
-    
-2.  **Test `time_server`:**
-    
-    ```
-    mcp-cli call localhost:8080 time_server
-    
-    ```
-    
-    **Expected Output:** (The time will vary)
-    
-    ```
-    2025-10-29T15:01:00.123456
-    
+
+3.  **Test `fetch` tool:**
+    ```bash
+    mcp-cli call localhost:8080 fetch '{"url":"https://ifconfig.co/json","max_bytes":1024}'
+    # Expected: JSON response from ifconfig.co
     ```
     
 
