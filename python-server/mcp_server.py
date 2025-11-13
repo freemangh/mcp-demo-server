@@ -1,17 +1,25 @@
 import argparse
 import logging
-import mcp
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import urllib.request
 import urllib.error
 
+from mcp.server import Server
+from mcp.types import Tool, TextContent
+from mcp.server.sse import SseServerTransport
+from starlette.applications import Starlette
+from starlette.routing import Route, Mount
+from starlette.requests import Request
+from starlette.responses import Response
+import uvicorn
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 # Constants
-DEFAULT_MODE = 'tcp'
+DEFAULT_MODE = 'stdio'
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8080
 DEFAULT_MAX_BYTES = 4096
@@ -24,39 +32,70 @@ def clamp(value, min_val, max_val):
         return DEFAULT_MAX_BYTES
     return max(min_val, min(value, max_val))
 
-def handle_echotest(ctx: mcp.Context):
-    """
-    Handles the 'echotest' tool.
-    Echoes back the received message.
-    """
-    try:
-        # Try to parse as JSON first for structured arguments
-        try:
-            args = json.loads(ctx.data.decode('utf-8'))
-            message = args.get('message', ctx.data.decode('utf-8'))
-        except (json.JSONDecodeError, KeyError):
-            # Fall back to raw data
-            message = ctx.data.decode('utf-8')
+# Create MCP server instance
+app = Server("mcp-server-demo-python")
 
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    """List available tools."""
+    return [
+        Tool(
+            name="echotest",
+            description="Echo back the provided message",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Message to echo back"
+                    }
+                },
+                "required": ["message"]
+            }
+        ),
+        Tool(
+            name="timeserver",
+            description="Return current time; optional IANA tz via timezone arg",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": "IANA timezone, e.g. Europe/Kyiv"
+                    }
+                }
+            }
+        ),
+        Tool(
+            name="fetch",
+            description="Fetch content from a URL (HTTP/HTTPS). Optional max_bytes to limit response size",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to fetch (must be http or https)"
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Limit response body bytes (default 4096, min 256, max 65536)"
+                    }
+                },
+                "required": ["url"]
+            }
+        )
+    ]
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    """Handle tool calls."""
+    if name == "echotest":
+        message = arguments.get("message", "")
         logging.info(f"TOOL: echotest -> {message}")
-        ctx.send(message)
-    except Exception as e:
-        logging.error(f"echotest error: {e}")
-        ctx.send(f"Error: {str(e)}")
+        return [TextContent(type="text", text=message)]
 
-def handle_timeserver(ctx: mcp.Context):
-    """
-    Handles the 'timeserver' tool.
-    Returns the current time with optional timezone support.
-    """
-    try:
-        # Try to parse arguments
-        timezone = ''
-        try:
-            args = json.loads(ctx.data.decode('utf-8'))
-            timezone = args.get('timezone', '')
-        except (json.JSONDecodeError, KeyError):
-            pass
+    elif name == "timeserver":
+        timezone = arguments.get("timezone", "")
 
         if timezone:
             try:
@@ -64,9 +103,9 @@ def handle_timeserver(ctx: mcp.Context):
                 now_local = datetime.now(tz)
                 loc_str = timezone
             except ZoneInfoNotFoundError:
-                ctx.send(f"Error: invalid timezone '{timezone}'")
-                logging.error(f"Invalid timezone: {timezone}")
-                return
+                error_msg = f"Error: invalid timezone '{timezone}'"
+                logging.error(error_msg)
+                return [TextContent(type="text", text=error_msg)]
         else:
             now_local = datetime.now()
             loc_str = "Local"
@@ -80,28 +119,17 @@ def handle_timeserver(ctx: mcp.Context):
         )
 
         logging.info(f"TOOL: timeserver (tz={loc_str})")
-        ctx.send(result)
-    except Exception as e:
-        logging.error(f"timeserver error: {e}")
-        ctx.send(f"Error: {str(e)}")
+        return [TextContent(type="text", text=result)]
 
-def handle_fetch(ctx: mcp.Context):
-    """
-    Handles the 'fetch' tool.
-    Fetches content from a given URL with optional size limit.
-    """
-    try:
-        args = json.loads(ctx.data.decode('utf-8'))
-        url = args.get('url', '')
-        max_bytes = clamp(args.get('max_bytes', 0), MIN_BYTES, MAX_BYTES)
+    elif name == "fetch":
+        url = arguments.get("url", "")
+        max_bytes = clamp(arguments.get("max_bytes", 0), MIN_BYTES, MAX_BYTES)
 
         if not url:
-            ctx.send("Error: URL is required")
-            return
+            return [TextContent(type="text", text="Error: URL is required")]
 
         if not (url.startswith('http://') or url.startswith('https://')):
-            ctx.send("Error: URL must start with http:// or https://")
-            return
+            return [TextContent(type="text", text="Error: URL must start with http:// or https://")]
 
         # Create request with custom user agent
         req = urllib.request.Request(
@@ -127,26 +155,63 @@ def handle_fetch(ctx: mcp.Context):
                 )
 
                 logging.info(f"TOOL: fetch -> {url} ({len(body)} bytes)")
-                ctx.send(result)
+                return [TextContent(type="text", text=result)]
 
         except urllib.error.HTTPError as e:
             error_msg = f"HTTP Error {e.code}: {e.reason}"
             logging.error(f"fetch error: {error_msg}")
-            ctx.send(error_msg)
+            return [TextContent(type="text", text=error_msg)]
         except urllib.error.URLError as e:
             error_msg = f"URL Error: {str(e.reason)}"
             logging.error(f"fetch error: {error_msg}")
-            ctx.send(error_msg)
+            return [TextContent(type="text", text=error_msg)]
         except Exception as e:
             error_msg = f"Fetch error: {str(e)}"
             logging.error(f"fetch error: {error_msg}")
-            ctx.send(error_msg)
+            return [TextContent(type="text", text=error_msg)]
 
-    except json.JSONDecodeError:
-        ctx.send("Error: Invalid JSON arguments")
-    except Exception as e:
-        logging.error(f"fetch error: {e}")
-        ctx.send(f"Error: {str(e)}")
+    else:
+        return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+def create_sse_server(host: str, port: int):
+    """Create SSE server with Starlette."""
+    # Create SSE transport
+    sse = SseServerTransport("/messages/")
+
+    async def handle_sse(request: Request) -> Response:
+        async with sse.connect_sse(
+            request.scope,
+            request.receive,
+            request._send
+        ) as streams:
+            await app.run(
+                streams[0],
+                streams[1],
+                app.create_initialization_options()
+            )
+        return Response()
+
+    # Create Starlette app
+    starlette_app = Starlette(
+        debug=True,
+        routes=[
+            Route("/sse", endpoint=handle_sse, methods=["GET"]),
+            Mount("/messages/", app=sse.handle_post_message),
+        ],
+    )
+
+    return starlette_app
+
+async def run_stdio():
+    """Run server in stdio mode."""
+    from mcp.server.stdio import stdio_server
+
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(
+            read_stream,
+            write_stream,
+            app.create_initialization_options()
+        )
 
 def main():
     """
@@ -154,40 +219,33 @@ def main():
     """
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='MCP Demo Server (Python)')
-    parser.add_argument('--mode', type=str, default=DEFAULT_MODE, choices=['stdio', 'tcp'],
-                        help=f'Transport mode: stdio or tcp (default: {DEFAULT_MODE})')
+    parser.add_argument('--mode', type=str, default=DEFAULT_MODE, choices=['stdio', 'http'],
+                        help=f'Transport mode: stdio or http (default: {DEFAULT_MODE})')
     parser.add_argument('--host', type=str, default=DEFAULT_HOST,
-                        help=f'Host address to bind to for TCP mode (default: {DEFAULT_HOST})')
+                        help=f'Host address to bind to for HTTP mode (default: {DEFAULT_HOST})')
     parser.add_argument('--port', type=int, default=DEFAULT_PORT,
-                        help=f'Port to listen on for TCP mode (default: {DEFAULT_PORT})')
+                        help=f'Port to listen on for HTTP mode (default: {DEFAULT_PORT})')
     args = parser.parse_args()
 
     if args.mode == 'stdio':
         logging.info("mcp-server-demo-python running in stdio mode")
-        logging.info("Note: stdio mode requires MCP SDK integration (not implemented in this demo)")
-        logging.info("Falling back to TCP mode for now...")
-        logging.warning("Full stdio support will be added in a future update")
-        # For now, fall back to TCP
-        args.mode = 'tcp'
+        import anyio
+        anyio.run(run_stdio)
 
-    if args.mode == 'tcp':
-        # Create a new MCP server instance for TCP transport
-        server = mcp.Server(host=args.host, port=args.port)
+    elif args.mode == 'http':
+        # Create and run SSE server (HTTP/SSE transport)
+        starlette_app = create_sse_server(args.host, args.port)
 
-        # Register our tool handlers
-        server.register("echotest", handle_echotest)
-        server.register("timeserver", handle_timeserver)
-        server.register("fetch", handle_fetch)
-
-        logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port} (TCP)")
+        logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port} (HTTP/SSE)")
         logging.info(f"Registered tools: echotest, timeserver, fetch")
+        logging.info(f"SSE endpoint: http://{args.host}:{args.port}/sse")
 
-        try:
-            # Start the server
-            server.serve_forever()
-        except KeyboardInterrupt:
-            logging.info("Server shutting down.")
-            server.shutdown()
+        uvicorn.run(
+            starlette_app,
+            host=args.host,
+            port=args.port,
+            log_level="info"
+        )
 
 if __name__ == "__main__":
     main()
