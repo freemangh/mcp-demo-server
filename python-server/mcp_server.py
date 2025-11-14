@@ -191,10 +191,24 @@ def create_sse_server(host: str, port: int):
             )
         return Response()
 
+    async def handle_health(request: Request) -> Response:
+        """Health check endpoint."""
+        return Response(
+            content=json.dumps({
+                "status": "ok",
+                "service": "mcp-server-demo-python",
+                "version": "v1.0.1"
+            }),
+            media_type="application/json",
+            status_code=200
+        )
+
     # Create Starlette app
     starlette_app = Starlette(
         debug=True,
         routes=[
+            Route("/health", endpoint=handle_health, methods=["GET"]),
+            Route("/healthz", endpoint=handle_health, methods=["GET"]),
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
             Mount("/messages/", app=sse.handle_post_message),
         ],
@@ -239,6 +253,7 @@ def main():
         logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port} (HTTP/SSE)")
         logging.info(f"Registered tools: echotest, timeserver, fetch")
         logging.info(f"SSE endpoint: http://{args.host}:{args.port}/sse")
+        logging.info(f"Health check endpoints: /health and /healthz")
 
         uvicorn.run(
             starlette_app,

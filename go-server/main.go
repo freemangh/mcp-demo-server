@@ -165,7 +165,7 @@ func main() {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "mcp-server-demo-go",
-		Version: "v0.1.0",
+		Version: "v1.0.1",
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -190,17 +190,39 @@ func main() {
 		addr := fmt.Sprintf("%s:%s", *host, *port)
 
 		// Create SSE handler for MCP over HTTP
-		handler := mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
+		mcpHandler := mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
 			return server
 		}, nil)
+
+		// Create a mux to handle both MCP and health check endpoints
+		mux := http.NewServeMux()
+
+		// Health check endpoint
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}`)
+		})
+
+		// Alternative health check endpoint (common Kubernetes convention)
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}`)
+		})
+
+		// MCP SSE handler on /sse path (consistent with Python implementation)
+		mux.Handle("/sse", mcpHandler)
 
 		// Create HTTP server
 		httpServer := &http.Server{
 			Addr:    addr,
-			Handler: handler,
+			Handler: mux,
 		}
 
 		log.Printf("mcp-server-demo-go listening on %s (HTTP/SSE)", addr)
+		log.Printf("SSE endpoint: http://%s/sse", addr)
+		log.Printf("Health check endpoints: /health and /healthz")
 		err = httpServer.ListenAndServe()
 	} else {
 		log.Printf("mcp-server-demo-go running in stdio mode")

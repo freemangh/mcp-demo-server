@@ -6,7 +6,7 @@ replicaCount: 2
 
 image:
   repository: mcp-server-demo-go
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
 
@@ -94,7 +94,7 @@ config:
 # Liveness probe configuration
 livenessProbe:
   httpGet:
-    path: /sse
+    path: /health
     port: 8080
   initialDelaySeconds: 5
   periodSeconds: 10
@@ -104,7 +104,7 @@ livenessProbe:
 # Readiness probe configuration
 readinessProbe:
   httpGet:
-    path: /sse
+    path: /health
     port: 8080
   initialDelaySeconds: 3
   periodSeconds: 5
