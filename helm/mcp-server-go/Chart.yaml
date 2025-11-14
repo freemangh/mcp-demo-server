@@ -2,7 +2,7 @@ apiVersion: v2
 name: mcp-server-go
 description: A Helm chart for MCP (Model Context Protocol) Demo Server - Go Implementation
 type: application
-version: 1.0.1
+version: 1.0.2
 appVersion: "1.0.1"
 keywords:
   - mcp
