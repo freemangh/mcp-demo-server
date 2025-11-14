@@ -42,6 +42,23 @@ Each server exposes the following tools for testing the MCP protocol:
 -   **`timeserver`**: Returns the current time with optional IANA timezone support (e.g., "Europe/Kyiv", "America/New_York")
 -   **`fetch`**: Fetches content from any HTTP/HTTPS URL with optional size limit
 
+## HTTP Endpoints
+
+When running in HTTP mode, both servers expose the following endpoints:
+
+| Endpoint | Purpose | Method | Response |
+|----------|---------|--------|----------|
+| `/sse` | MCP SSE connection | GET/POST | Server-Sent Events stream for MCP protocol |
+| `/health` | Health check | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.1"}` |
+| `/healthz` | Health check (K8s style) | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.1"}` |
+| `/messages/` | SSE message posting (Python only) | POST | Message handling for SSE transport |
+
+The health check endpoints (`/health` and `/healthz`) are designed for:
+- Kubernetes liveness and readiness probes
+- Load balancer health checks
+- Monitoring systems
+- Quick service status verification
+
 ## CLI Alignment
 
 Both servers support consistent command-line arguments:
@@ -163,17 +180,26 @@ go install github.com/modelcontextprotocol/mcp-cli@latest
     go run . --mode=http --host=0.0.0.0 --port=8080
     # Server: mcp-server-demo-go listening on 0.0.0.0:8080 (HTTP/SSE)
     ```
-    
+
 
 ### Test (Locally)
 
 **For HTTP/SSE mode:**
 
-The server exposes an SSE endpoint at `/sse` for MCP protocol communication. You can verify the server is running:
+The server exposes multiple endpoints. You can verify the server is running:
 
 ```bash
+# Test health check endpoint
+curl http://localhost:8080/health
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}
+
+# Test Kubernetes-style health check
+curl http://localhost:8080/healthz
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}
+
+# Test SSE endpoint (for MCP protocol)
 curl -I http://localhost:8080/sse
-# Should return 200 OK with SSE headers
+# Should return 405 Method Not Allowed (HEAD not supported for SSE)
 ```
 
 To interact with the MCP server, use an MCP-compatible client that supports SSE transport, such as:
@@ -272,15 +298,24 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
     python3 mcp_server.py --mode=http --host=0.0.0.0 --port=8080
     # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080 (HTTP/SSE)
     ```
-    
+
 
 ### Test (Locally)
 
 **For HTTP/SSE mode:**
 
-The server exposes an SSE endpoint at `/sse` for MCP protocol communication. You can verify the server is running:
+The server exposes multiple endpoints. You can verify the server is running:
 
 ```bash
+# Test health check endpoint
+curl http://localhost:8080/health
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.1"}
+
+# Test Kubernetes-style health check
+curl http://localhost:8080/healthz
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.1"}
+
+# Test SSE endpoint (for MCP protocol)
 curl -I http://localhost:8080/sse
 # Should return 200 OK with SSE headers
 ```
@@ -352,22 +387,23 @@ For production deployments, it's recommended to use semantic versioning and push
 ```bash
 cd go-server
 
+# Set version and registry configuration
+VERSION=v1.0.1
+REGISTRY_USER=yourusername              # For Docker Hub
+# REGISTRY=gcr.io/your-project-id       # For GCR
+# REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
+
 # Build with version tag
-VERSION=v1.0.0
 docker build -t mcp-server-demo-go:${VERSION} -t mcp-server-demo-go:latest .
 
-# Tag for your container registry (replace with your registry)
+# Tag for your container registry
 # For Docker Hub:
-docker tag mcp-server-demo-go:${VERSION} yourusername/mcp-server-demo-go:${VERSION}
-docker tag mcp-server-demo-go:latest yourusername/mcp-server-demo-go:latest
+docker tag mcp-server-demo-go:${VERSION} ${REGISTRY_USER}/mcp-server-demo-go:${VERSION}
+docker tag mcp-server-demo-go:latest ${REGISTRY_USER}/mcp-server-demo-go:latest
 
-# For Google Container Registry (GCR):
-docker tag mcp-server-demo-go:${VERSION} gcr.io/your-project-id/mcp-server-demo-go:${VERSION}
-docker tag mcp-server-demo-go:latest gcr.io/your-project-id/mcp-server-demo-go:latest
-
-# For Amazon ECR:
-docker tag mcp-server-demo-go:${VERSION} 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:${VERSION}
-docker tag mcp-server-demo-go:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:latest
+# For Google Container Registry (GCR) or Amazon ECR:
+# docker tag mcp-server-demo-go:${VERSION} ${REGISTRY}/mcp-server-demo-go:${VERSION}
+# docker tag mcp-server-demo-go:latest ${REGISTRY}/mcp-server-demo-go:latest
 ```
 
 **Python Server:**
@@ -375,22 +411,23 @@ docker tag mcp-server-demo-go:latest 123456789012.dkr.ecr.us-east-1.amazonaws.co
 ```bash
 cd python-server
 
+# Set version and registry configuration
+VERSION=v1.0.1
+REGISTRY_USER=yourusername              # For Docker Hub
+# REGISTRY=gcr.io/your-project-id       # For GCR
+# REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
+
 # Build with version tag
-VERSION=v1.0.0
 docker build -t mcp-server-demo-python:${VERSION} -t mcp-server-demo-python:latest .
 
-# Tag for your container registry (replace with your registry)
+# Tag for your container registry
 # For Docker Hub:
-docker tag mcp-server-demo-python:${VERSION} yourusername/mcp-server-demo-python:${VERSION}
-docker tag mcp-server-demo-python:latest yourusername/mcp-server-demo-python:latest
+docker tag mcp-server-demo-python:${VERSION} ${REGISTRY_USER}/mcp-server-demo-python:${VERSION}
+docker tag mcp-server-demo-python:latest ${REGISTRY_USER}/mcp-server-demo-python:latest
 
-# For Google Container Registry (GCR):
-docker tag mcp-server-demo-python:${VERSION} gcr.io/your-project-id/mcp-server-demo-python:${VERSION}
-docker tag mcp-server-demo-python:latest gcr.io/your-project-id/mcp-server-demo-python:latest
-
-# For Amazon ECR:
-docker tag mcp-server-demo-python:${VERSION} 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:${VERSION}
-docker tag mcp-server-demo-python:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:latest
+# For Google Container Registry (GCR) or Amazon ECR:
+# docker tag mcp-server-demo-python:${VERSION} ${REGISTRY}/mcp-server-demo-python:${VERSION}
+# docker tag mcp-server-demo-python:latest ${REGISTRY}/mcp-server-demo-python:latest
 ```
 
 #### Pushing to Container Registry
@@ -402,10 +439,10 @@ docker tag mcp-server-demo-python:latest 123456789012.dkr.ecr.us-east-1.amazonaw
 docker login
 
 # Push images
-docker push yourusername/mcp-server-demo-go:v1.0.0
-docker push yourusername/mcp-server-demo-go:latest
-docker push yourusername/mcp-server-demo-python:v1.0.0
-docker push yourusername/mcp-server-demo-python:latest
+docker push ${REGISTRY_USER}/mcp-server-demo-go:${VERSION}
+docker push ${REGISTRY_USER}/mcp-server-demo-go:latest
+docker push ${REGISTRY_USER}/mcp-server-demo-python:${VERSION}
+docker push ${REGISTRY_USER}/mcp-server-demo-python:latest
 ```
 
 **Google Container Registry (GCR):**
@@ -415,27 +452,30 @@ docker push yourusername/mcp-server-demo-python:latest
 gcloud auth configure-docker
 
 # Push images
-docker push gcr.io/your-project-id/mcp-server-demo-go:v1.0.0
-docker push gcr.io/your-project-id/mcp-server-demo-go:latest
-docker push gcr.io/your-project-id/mcp-server-demo-python:v1.0.0
-docker push gcr.io/your-project-id/mcp-server-demo-python:latest
+docker push ${REGISTRY}/mcp-server-demo-go:${VERSION}
+docker push ${REGISTRY}/mcp-server-demo-go:latest
+docker push ${REGISTRY}/mcp-server-demo-python:${VERSION}
+docker push ${REGISTRY}/mcp-server-demo-python:latest
 ```
 
 **Amazon ECR:**
 
 ```bash
+# Set AWS region
+AWS_REGION=us-east-1
+
 # Authenticate with ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
 
 # Create repositories if they don't exist
-aws ecr create-repository --repository-name mcp-server-demo-go --region us-east-1
-aws ecr create-repository --repository-name mcp-server-demo-python --region us-east-1
+aws ecr create-repository --repository-name mcp-server-demo-go --region ${AWS_REGION}
+aws ecr create-repository --repository-name mcp-server-demo-python --region ${AWS_REGION}
 
 # Push images
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:v1.0.0
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-go:latest
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:v1.0.0
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcp-server-demo-python:latest
+docker push ${REGISTRY}/mcp-server-demo-go:${VERSION}
+docker push ${REGISTRY}/mcp-server-demo-go:latest
+docker push ${REGISTRY}/mcp-server-demo-python:${VERSION}
+docker push ${REGISTRY}/mcp-server-demo-python:latest
 ```
 
 ### Kubernetes Deployment
@@ -498,22 +538,26 @@ kind load docker-image mcp-server-demo-python:latest --name mcp-demo
 Edit the manifest files to use your registry images:
 
 ```bash
+# Set your registry and version
+REGISTRY_USER=yourusername
+VERSION=v1.0.1
+
 # For go-server-deployment.yaml, change:
 # image: mcp-server-demo-go:latest
 # to:
-# image: yourusername/mcp-server-demo-go:v1.0.0
+# image: ${REGISTRY_USER}/mcp-server-demo-go:${VERSION}
 
 # For python-server-deployment.yaml, change:
 # image: mcp-server-demo-python:latest
 # to:
-# image: yourusername/mcp-server-demo-python:v1.0.0
+# image: ${REGISTRY_USER}/mcp-server-demo-python:${VERSION}
 ```
 
 Or use `sed` to update:
 ```bash
 cd k8s
-sed -i 's|mcp-server-demo-go:latest|yourusername/mcp-server-demo-go:v1.0.0|g' go-server-deployment.yaml
-sed -i 's|mcp-server-demo-python:latest|yourusername/mcp-server-demo-python:v1.0.0|g' python-server-deployment.yaml
+sed -i "s|mcp-server-demo-go:latest|${REGISTRY_USER}/mcp-server-demo-go:${VERSION}|g" go-server-deployment.yaml
+sed -i "s|mcp-server-demo-python:latest|${REGISTRY_USER}/mcp-server-demo-python:${VERSION}|g" python-server-deployment.yaml
 ```
 
 **3. Deploy to Kubernetes:**
@@ -680,8 +724,9 @@ kubectl autoscale deployment mcp-server-demo-python --cpu-percent=70 --min=2 --m
 
 ```bash
 # Update to a new version
-kubectl set image deployment/mcp-server-demo-go mcp-server=yourusername/mcp-server-demo-go:v1.1.0
-kubectl set image deployment/mcp-server-demo-python mcp-server=yourusername/mcp-server-demo-python:v1.1.0
+NEW_VERSION=v1.1.0
+kubectl set image deployment/mcp-server-demo-go mcp-server=${REGISTRY_USER}/mcp-server-demo-go:${NEW_VERSION}
+kubectl set image deployment/mcp-server-demo-python mcp-server=${REGISTRY_USER}/mcp-server-demo-python:${NEW_VERSION}
 
 # Check rollout status
 kubectl rollout status deployment/mcp-server-demo-go
@@ -791,8 +836,8 @@ helm install mcp-go ./helm/mcp-server-go
 
 # Install with custom values
 helm install mcp-go ./helm/mcp-server-go \
-  --set image.repository=yourusername/mcp-server-demo-go \
-  --set image.tag=v1.0.0 \
+  --set image.repository=${REGISTRY_USER}/mcp-server-demo-go \
+  --set image.tag=${VERSION} \
   --set replicaCount=3
 
 # Install with Ingress enabled
@@ -818,8 +863,8 @@ helm install mcp-python ./helm/mcp-server-python
 
 # Install with custom values
 helm install mcp-python ./helm/mcp-server-python \
-  --set image.repository=yourusername/mcp-server-demo-python \
-  --set image.tag=v1.0.0 \
+  --set image.repository=${REGISTRY_USER}/mcp-server-demo-python \
+  --set image.tag=${VERSION} \
   --set replicaCount=3
 
 # Install with Ingress enabled
@@ -850,8 +895,8 @@ Create a custom values file to override defaults:
 replicaCount: 3
 
 image:
-  repository: yourusername/mcp-server-demo-go
-  tag: "v1.0.0"
+  repository: ${REGISTRY_USER}/mcp-server-demo-go
+  tag: "v1.0.1"
   pullPolicy: Always
 
 resources:
@@ -998,7 +1043,7 @@ replicaCount: 3
 
 image:
   repository: your-registry.io/mcp-server-demo-go
-  tag: "v1.0.0"
+  tag: "v1.0.1"
   pullPolicy: Always
 
 imagePullSecrets:

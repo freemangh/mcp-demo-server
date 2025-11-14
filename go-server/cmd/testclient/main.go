@@ -184,7 +184,7 @@ func connectToServer(ctx context.Context, serverURL string) (*mcp.ClientSession,
 	// Create MCP client
 	client := mcp.NewClient(&mcp.Implementation{
 		Name:    "mcp-test-client",
-		Version: "v0.1.0",
+		Version: "v1.0.1",
 	}, nil)
 
 	// Create SSE transport

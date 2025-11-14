@@ -2,8 +2,8 @@ apiVersion: v2
 name: mcp-server-python
 description: A Helm chart for MCP (Model Context Protocol) Demo Server - Python Implementation
 type: application
-version: 1.0.0
-appVersion: "1.0.0"
+version: 1.0.1
+appVersion: "1.0.1"
 keywords:
   - mcp
   - model-context-protocol

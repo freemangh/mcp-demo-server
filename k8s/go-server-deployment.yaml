@@ -30,7 +30,7 @@ spec:
           protocol: TCP
         livenessProbe:
           httpGet:
-            path: /sse
+            path: /health
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -38,7 +38,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /sse
+            path: /health
             port: 8080
           initialDelaySeconds: 3
           periodSeconds: 5
