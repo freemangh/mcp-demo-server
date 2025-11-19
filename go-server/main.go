@@ -18,6 +18,25 @@ const (
 	minCapBytes     = 256
 )
 
+// responseWriter wraps http.ResponseWriter to capture the status code
+// It also implements http.Flusher to support SSE streaming
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Flush implements http.Flusher for SSE support
+func (rw *responseWriter) Flush() {
+	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
 }
@@ -197,6 +216,21 @@ func main() {
 		// Create a mux to handle both MCP and health check endpoints
 		mux := http.NewServeMux()
 
+		// Logging middleware to trace ALL incoming requests
+		loggingMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("[REQUEST] Method=%s Path=%s RemoteAddr=%s UserAgent=%s",
+				r.Method, r.URL.Path, r.RemoteAddr, r.Header.Get("User-Agent"))
+			log.Printf("[HEADERS] %v", r.Header)
+
+			// Create a response writer wrapper to capture status code
+			wrappedWriter := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			// Serve the request
+			mux.ServeHTTP(wrappedWriter, r)
+
+			log.Printf("[RESPONSE] Path=%s Status=%d", r.URL.Path, wrappedWriter.statusCode)
+		})
+
 		// Health check endpoint
 		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -214,10 +248,18 @@ func main() {
 		// MCP SSE handler on /sse path (consistent with Python implementation)
 		mux.Handle("/sse", mcpHandler)
 
-		// Create HTTP server
+		// Catch-all handler for unmatched routes (will show 404s)
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				log.Printf("[UNHANDLED] Method=%s Path=%s - returning 404", r.Method, r.URL.Path)
+			}
+			http.NotFound(w, r)
+		})
+
+		// Create HTTP server with logging middleware
 		httpServer := &http.Server{
 			Addr:    addr,
-			Handler: mux,
+			Handler: loggingMux,
 		}
 
 		log.Printf("mcp-server-demo-go listening on %s (HTTP/SSE)", addr)
