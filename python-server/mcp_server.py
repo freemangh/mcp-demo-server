@@ -13,6 +13,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route, Mount
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 # Configure logging
@@ -173,6 +174,31 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware to log all HTTP requests and responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Log incoming request
+        logging.info(f"[REQUEST] Method={request.method} Path={request.url.path} "
+                    f"RemoteAddr={request.client.host}:{request.client.port} "
+                    f"UserAgent={request.headers.get('user-agent', 'Unknown')}")
+
+        # Log query parameters if present
+        if request.url.query:
+            logging.info(f"[QUERY] {request.url.query}")
+
+        # Log all headers
+        headers_dict = dict(request.headers)
+        logging.info(f"[HEADERS] {headers_dict}")
+
+        # Call the next middleware/endpoint
+        response = await call_next(request)
+
+        # Log response
+        logging.info(f"[RESPONSE] Path={request.url.path} Status={response.status_code}")
+
+        return response
+
 def create_sse_server(host: str, port: int):
     """Create SSE server with Starlette."""
     # Create SSE transport
@@ -203,7 +229,9 @@ def create_sse_server(host: str, port: int):
             status_code=200
         )
 
-    # Create Starlette app
+    # Create Starlette app with logging middleware
+    from starlette.middleware import Middleware
+
     starlette_app = Starlette(
         debug=True,
         routes=[
@@ -212,6 +240,9 @@ def create_sse_server(host: str, port: int):
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
             Mount("/messages/", app=sse.handle_post_message),
         ],
+        middleware=[
+            Middleware(RequestLoggingMiddleware)
+        ]
     )
 
     return starlette_app
