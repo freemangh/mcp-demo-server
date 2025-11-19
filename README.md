@@ -49,8 +49,8 @@ When running in HTTP mode, both servers expose the following endpoints:
 | Endpoint | Purpose | Method | Response |
 |----------|---------|--------|----------|
 | `/sse` | MCP SSE connection | GET/POST | Server-Sent Events stream for MCP protocol |
-| `/health` | Health check | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.1"}` |
-| `/healthz` | Health check (K8s style) | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.1"}` |
+| `/health` | Health check | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.3"}` |
+| `/healthz` | Health check (K8s style) | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.3"}` |
 | `/messages/` | SSE message posting (Python only) | POST | Message handling for SSE transport |
 
 The health check endpoints (`/health` and `/healthz`) are designed for:
@@ -191,11 +191,11 @@ The server exposes multiple endpoints. You can verify the server is running:
 ```bash
 # Test health check endpoint
 curl http://localhost:8080/health
-# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}
 
 # Test Kubernetes-style health check
 curl http://localhost:8080/healthz
-# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}
 
 # Test SSE endpoint (for MCP protocol)
 curl -I http://localhost:8080/sse
@@ -309,11 +309,11 @@ The server exposes multiple endpoints. You can verify the server is running:
 ```bash
 # Test health check endpoint
 curl http://localhost:8080/health
-# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.1"}
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.3"}
 
 # Test Kubernetes-style health check
 curl http://localhost:8080/healthz
-# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.1"}
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.3"}
 
 # Test SSE endpoint (for MCP protocol)
 curl -I http://localhost:8080/sse
@@ -388,7 +388,7 @@ For production deployments, it's recommended to use semantic versioning and push
 cd go-server
 
 # Set version and registry configuration
-VERSION=v1.0.1
+VERSION=v1.0.3
 REGISTRY_USER=yourusername              # For Docker Hub
 # REGISTRY=gcr.io/your-project-id       # For GCR
 # REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
@@ -412,7 +412,7 @@ docker tag mcp-server-demo-go:latest ${REGISTRY_USER}/mcp-server-demo-go:latest
 cd python-server
 
 # Set version and registry configuration
-VERSION=v1.0.1
+VERSION=v1.0.3
 REGISTRY_USER=yourusername              # For Docker Hub
 # REGISTRY=gcr.io/your-project-id       # For GCR
 # REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
@@ -540,7 +540,7 @@ Edit the manifest files to use your registry images:
 ```bash
 # Set your registry and version
 REGISTRY_USER=yourusername
-VERSION=v1.0.1
+VERSION=v1.0.3
 
 # For go-server-deployment.yaml, change:
 # image: mcp-server-demo-go:latest
@@ -896,7 +896,7 @@ replicaCount: 3
 
 image:
   repository: ${REGISTRY_USER}/mcp-server-demo-go
-  tag: "v1.0.1"
+  tag: "v1.0.3"
   pullPolicy: Always
 
 resources:
@@ -1043,7 +1043,7 @@ replicaCount: 3
 
 image:
   repository: your-registry.io/mcp-server-demo-go
-  tag: "v1.0.1"
+  tag: "v1.0.3"
   pullPolicy: Always
 
 imagePullSecrets:

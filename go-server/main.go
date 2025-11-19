@@ -184,7 +184,7 @@ func main() {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "mcp-server-demo-go",
-		Version: "v1.0.1",
+		Version: "v1.0.3",
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -235,14 +235,14 @@ func main() {
 		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}`)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}`)
 		})
 
 		// Alternative health check endpoint (common Kubernetes convention)
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.1"}`)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}`)
 		})
 
 		// MCP SSE handler on /sse path (consistent with Python implementation)

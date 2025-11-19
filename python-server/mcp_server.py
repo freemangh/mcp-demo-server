@@ -223,7 +223,7 @@ def create_sse_server(host: str, port: int):
             content=json.dumps({
                 "status": "ok",
                 "service": "mcp-server-demo-python",
-                "version": "v1.0.1"
+                "version": "v1.0.3"
             }),
             media_type="application/json",
             status_code=200
