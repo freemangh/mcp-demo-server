@@ -41,13 +41,18 @@ service:
   port: 8080
   targetPort: 8080
   annotations: {}
+  # Session affinity for Streamable HTTP transport
+  # Ensures clients reconnect to the same pod for session continuity
+  sessionAffinity:
+    enabled: true
+    timeoutSeconds: 1800  # 30 minutes (matches server session timeout)
 
 ingress:
   enabled: false
   className: "nginx"
   annotations:
     # nginx.ingress.kubernetes.io/rewrite-target: /
-    # Increase timeout for SSE connections
+    # Increase timeout for Streamable HTTP connections
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:

@@ -8,9 +8,9 @@ import urllib.error
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
-from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http import create_streamable_http_app
 from starlette.applications import Starlette
-from starlette.routing import Route, Mount
+from starlette.routing import Route
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -20,6 +20,7 @@ import uvicorn
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 # Constants
+VERSION = "v1.1.0"
 DEFAULT_MODE = 'stdio'
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8080
@@ -199,23 +200,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         return response
 
-def create_sse_server(host: str, port: int):
-    """Create SSE server with Starlette."""
-    # Create SSE transport
-    sse = SseServerTransport("/messages/")
-
-    async def handle_sse(request: Request) -> Response:
-        async with sse.connect_sse(
-            request.scope,
-            request.receive,
-            request._send
-        ) as streams:
-            await app.run(
-                streams[0],
-                streams[1],
-                app.create_initialization_options()
-            )
-        return Response()
+def create_streamable_http_server(host: str, port: int):
+    """Create Streamable HTTP server with Starlette."""
 
     async def handle_health(request: Request) -> Response:
         """Health check endpoint."""
@@ -223,22 +209,32 @@ def create_sse_server(host: str, port: int):
             content=json.dumps({
                 "status": "ok",
                 "service": "mcp-server-demo-python",
-                "version": "v1.0.3"
+                "version": VERSION
             }),
             media_type="application/json",
             status_code=200
         )
 
+    # Create Streamable HTTP app with stateful sessions (in-memory)
+    # This provides session management with session IDs
+    mcp_app = create_streamable_http_app(
+        app,
+        path="/mcp",
+        stateless=False,  # Stateful sessions with session ID management
+        json_response=False,  # Use SSE streaming for responses
+        session_timeout=30 * 60  # 30 minutes timeout for idle sessions
+    )
+
     # Create Starlette app with logging middleware
     from starlette.middleware import Middleware
+    from starlette.routing import Mount
 
     starlette_app = Starlette(
         debug=True,
         routes=[
             Route("/health", endpoint=handle_health, methods=["GET"]),
             Route("/healthz", endpoint=handle_health, methods=["GET"]),
-            Route("/sse", endpoint=handle_sse, methods=["GET"]),
-            Mount("/messages/", app=sse.handle_post_message),
+            Mount("/mcp", app=mcp_app),
         ],
         middleware=[
             Middleware(RequestLoggingMiddleware)
@@ -273,17 +269,20 @@ def main():
     args = parser.parse_args()
 
     if args.mode == 'stdio':
-        logging.info("mcp-server-demo-python running in stdio mode")
+        logging.info(f"mcp-server-demo-python {VERSION} starting...")
+        logging.info("Transport: stdio")
         import anyio
         anyio.run(run_stdio)
 
     elif args.mode == 'http':
-        # Create and run SSE server (HTTP/SSE transport)
-        starlette_app = create_sse_server(args.host, args.port)
+        # Create and run Streamable HTTP server
+        starlette_app = create_streamable_http_server(args.host, args.port)
 
-        logging.info(f"mcp-server-demo-python listening on {args.host}:{args.port} (HTTP/SSE)")
+        logging.info(f"mcp-server-demo-python {VERSION} starting...")
+        logging.info("Transport: Streamable HTTP (MCP spec 2025-03-26)")
         logging.info(f"Registered tools: echotest, timeserver, fetch")
-        logging.info(f"SSE endpoint: http://{args.host}:{args.port}/sse")
+        logging.info(f"Server listening on {args.host}:{args.port}")
+        logging.info(f"MCP endpoint: http://{args.host}:{args.port}/mcp")
         logging.info(f"Health check endpoints: /health and /healthz")
 
         uvicorn.run(

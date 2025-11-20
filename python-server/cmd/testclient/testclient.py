@@ -13,7 +13,10 @@ import sys
 from typing import Any, Dict, Optional
 
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
+
+# Version
+VERSION = "v1.1.0"
 
 
 class MCPTestClient:
@@ -24,15 +27,15 @@ class MCPTestClient:
         Initialize the MCP test client.
 
         Args:
-            server_url: SSE endpoint URL of the MCP server
+            server_url: Streamable HTTP endpoint URL of the MCP server
         """
         self.server_url = server_url
         self.session: Optional[ClientSession] = None
 
     async def connect(self) -> None:
-        """Connect to the MCP server via SSE transport."""
+        """Connect to the MCP server via Streamable HTTP transport."""
         print(f"Connecting to {self.server_url}...")
-        # The sse_client context manager handles connection setup
+        # The streamablehttp_client context manager handles connection setup
         # We'll connect in the context where we use it
 
     async def list_tools(self) -> None:
@@ -177,9 +180,9 @@ class MCPTestClient:
 
     async def run_interactive(self) -> None:
         """Run in interactive REPL mode."""
-        print("MCP Test Client - Interactive Mode")
+        print(f"MCP Test Client {VERSION} - Interactive Mode")
 
-        async with sse_client(self.server_url) as (read_stream, write_stream):
+        async with streamablehttp_client(self.server_url) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 self.session = session
 
@@ -217,7 +220,7 @@ class MCPTestClient:
             print(f"Error: Failed to parse arguments: {e}")
             sys.exit(1)
 
-        async with sse_client(self.server_url) as (read_stream, write_stream):
+        async with streamablehttp_client(self.server_url) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 self.session = session
 
@@ -252,8 +255,8 @@ Examples:
     parser.add_argument(
         '-url', '--url',
         type=str,
-        default='http://localhost:8080/sse',
-        help='MCP server SSE endpoint URL (default: http://localhost:8080/sse)'
+        default='http://localhost:8080/mcp',
+        help='MCP server Streamable HTTP endpoint URL (default: http://localhost:8080/mcp)'
     )
     parser.add_argument(
         '-i', '--interactive',

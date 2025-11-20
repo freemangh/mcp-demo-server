@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	version         = "v1.1.0"
 	defaultMaxBytes = 4096
 	maxCapBytes     = 65536
 	minCapBytes     = 256
@@ -184,7 +185,7 @@ func main() {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "mcp-server-demo-go",
-		Version: "v1.0.3",
+		Version: version,
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -208,10 +209,18 @@ func main() {
 	if *mode == "http" {
 		addr := fmt.Sprintf("%s:%s", *host, *port)
 
-		// Create SSE handler for MCP over HTTP
-		mcpHandler := mcp.NewSSEHandler(func(*http.Request) *mcp.Server {
+		log.Printf("mcp-server-demo-go %s starting...", version)
+		log.Printf("Transport: Streamable HTTP (MCP spec 2025-03-26)")
+
+		// Create Streamable HTTP handler for MCP over HTTP
+		// Using in-memory session store (single-node deployment)
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 			return server
-		}, nil)
+		}, &mcp.StreamableHTTPOptions{
+			Stateless:      false, // Stateful sessions with session ID management
+			JSONResponse:   false, // Use SSE streaming for responses
+			SessionTimeout: 30 * time.Minute, // Session timeout for idle connections
+		})
 
 		// Create a mux to handle both MCP and health check endpoints
 		mux := http.NewServeMux()
@@ -235,18 +244,18 @@ func main() {
 		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}`)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"%s"}`, version)
 		})
 
 		// Alternative health check endpoint (common Kubernetes convention)
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}`)
+			fmt.Fprintf(w, `{"status":"ok","service":"mcp-server-demo-go","version":"%s"}`, version)
 		})
 
-		// MCP SSE handler on /sse path (consistent with Python implementation)
-		mux.Handle("/sse", mcpHandler)
+		// MCP Streamable HTTP handler on /mcp path (new standard endpoint)
+		mux.Handle("/mcp", mcpHandler)
 
 		// Catch-all handler for unmatched routes (will show 404s)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -262,12 +271,13 @@ func main() {
 			Handler: loggingMux,
 		}
 
-		log.Printf("mcp-server-demo-go listening on %s (HTTP/SSE)", addr)
-		log.Printf("SSE endpoint: http://%s/sse", addr)
+		log.Printf("Server listening on %s", addr)
+		log.Printf("MCP endpoint: http://%s/mcp", addr)
 		log.Printf("Health check endpoints: /health and /healthz")
 		err = httpServer.ListenAndServe()
 	} else {
-		log.Printf("mcp-server-demo-go running in stdio mode")
+		log.Printf("mcp-server-demo-go %s starting...", version)
+		log.Printf("Transport: stdio")
 		err = server.Run(ctx, &mcp.StdioTransport{})
 	}
 

@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	version        = "v1.1.0"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -25,7 +26,7 @@ type Config struct {
 
 func main() {
 	// Parse command-line flags
-	serverURL := flag.String("url", "http://localhost:8080/sse", "MCP server SSE endpoint URL")
+	serverURL := flag.String("url", "http://localhost:8080/mcp", "MCP server Streamable HTTP endpoint URL")
 	timeout := flag.Duration("timeout", defaultTimeout, "Request timeout duration")
 	interactive := flag.Bool("i", false, "Interactive mode (REPL)")
 	tool := flag.String("tool", "", "Tool name to call (echotest, timeserver, fetch)")
@@ -45,7 +46,7 @@ func main() {
 		fmt.Println("MCP Test Client")
 		fmt.Println()
 		fmt.Println("Usage:")
-		fmt.Println("  Interactive mode: testclient -i [-url http://localhost:8080/sse]")
+		fmt.Println("  Interactive mode: testclient -i [-url http://localhost:8080/mcp]")
 		fmt.Println("  Single command:   testclient -tool timeserver -args '{\"timezone\":\"Europe/Kyiv\"}'")
 		fmt.Println()
 		fmt.Println("Flags:")
@@ -83,7 +84,7 @@ func runSingleCommand(config Config, toolName, argsJSON string) {
 }
 
 func runInteractive(config Config) {
-	fmt.Println("MCP Test Client - Interactive Mode")
+	fmt.Printf("MCP Test Client %s - Interactive Mode\n", version)
 	fmt.Printf("Connecting to %s...\n", config.ServerURL)
 
 	ctx := context.Background()
@@ -184,12 +185,13 @@ func connectToServer(ctx context.Context, serverURL string) (*mcp.ClientSession,
 	// Create MCP client
 	client := mcp.NewClient(&mcp.Implementation{
 		Name:    "mcp-test-client",
-		Version: "v1.0.1",
+		Version: version,
 	}, nil)
 
-	// Create SSE transport
-	transport := &mcp.SSEClientTransport{
-		Endpoint: serverURL,
+	// Create Streamable HTTP transport
+	transport := &mcp.StreamableClientTransport{
+		Endpoint:   serverURL,
+		MaxRetries: 3,
 	}
 
 	// Connect to server

@@ -67,6 +67,12 @@ metadata:
     app: mcp-server-demo-python
 spec:
   type: ClusterIP
+  # Enable sticky sessions for Streamable HTTP transport
+  # This ensures clients reconnect to the same pod for session continuity
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 1800  # 30 minutes (matches server session timeout)
   ports:
   - port: 8080
     targetPort: 8080
