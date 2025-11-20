@@ -48,16 +48,21 @@ When running in HTTP mode, both servers expose the following endpoints:
 
 | Endpoint | Purpose | Method | Response |
 |----------|---------|--------|----------|
-| `/sse` | MCP SSE connection | GET/POST | Server-Sent Events stream for MCP protocol |
-| `/health` | Health check | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.3"}` |
-| `/healthz` | Health check (K8s style) | GET | JSON status: `{"status":"ok","service":"...","version":"v1.0.3"}` |
-| `/messages/` | SSE message posting (Python only) | POST | Message handling for SSE transport |
+| `/mcp` | MCP Streamable HTTP endpoint | GET/POST/DELETE | Streamable HTTP transport for MCP protocol (MCP spec 2025-03-26) |
+| `/health` | Health check | GET | JSON status: `{"status":"ok","service":"...","version":"v1.1.0"}` |
+| `/healthz` | Health check (K8s style) | GET | JSON status: `{"status":"ok","service":"...","version":"v1.1.0"}` |
 
 The health check endpoints (`/health` and `/healthz`) are designed for:
 - Kubernetes liveness and readiness probes
 - Load balancer health checks
 - Monitoring systems
 - Quick service status verification
+
+**Transport Protocol:** Both servers use the modern **Streamable HTTP transport** (MCP specification 2025-03-26) which provides:
+- Single unified `/mcp` endpoint for all operations
+- Stateful session management with `Mcp-Session-Id` header
+- Session affinity support for production deployments
+- 30-minute session timeout for idle connections
 
 ## CLI Alignment
 
@@ -70,8 +75,8 @@ Both servers support consistent command-line arguments:
 | `--port` | default: `8080` | default: `8080` | Listen port |
 
 **Transport Modes:**
-- **Go**: `stdio` (default, local) or `http` (HTTP/SSE for network)
-- **Python**: `stdio` (default, local) or `http` (HTTP/SSE for network)
+- **Go**: `stdio` (default, local) or `http` (Streamable HTTP for network)
+- **Python**: `stdio` (default, local) or `http` (Streamable HTTP for network)
     
 
 ## Testing Clients
@@ -93,12 +98,12 @@ go build -o testclient ./cmd/testclient
 **Usage:**
 ```bash
 # Single command mode
-./testclient -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/sse
-./testclient -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/sse
-./testclient -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/sse
+./testclient -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/mcp
+./testclient -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/mcp
+./testclient -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/mcp
 
 # Interactive mode
-./testclient -i -url http://localhost:8080/sse
+./testclient -i -url http://localhost:8080/mcp
 ```
 
 #### Python Test Client
@@ -114,12 +119,12 @@ pip install -r requirements.txt
 **Usage:**
 ```bash
 # Single command mode
-python3 cmd/testclient/testclient.py -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/sse
-python3 cmd/testclient/testclient.py -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/sse
-python3 cmd/testclient/testclient.py -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/sse
+python3 cmd/testclient/testclient.py -tool echotest -args '{"message":"Hello"}' -url http://localhost:8080/mcp
+python3 cmd/testclient/testclient.py -tool timeserver -args '{"timezone":"Europe/Kyiv"}' -url http://localhost:8080/mcp
+python3 cmd/testclient/testclient.py -tool fetch -args '{"url":"https://ifconfig.co/json","max_bytes":1024}' -url http://localhost:8080/mcp
 
 # Interactive mode
-python3 cmd/testclient/testclient.py -i -url http://localhost:8080/sse
+python3 cmd/testclient/testclient.py -i -url http://localhost:8080/mcp
 ```
 
 #### Interactive Mode Commands
@@ -175,44 +180,55 @@ go install github.com/modelcontextprotocol/mcp-cli@latest
     # Server: mcp-server-demo-go running in stdio mode
     ```
 
-    **HTTP/SSE mode (for network access):**
+    **HTTP mode (Streamable HTTP for network access):**
     ```bash
     go run . --mode=http --host=0.0.0.0 --port=8080
-    # Server: mcp-server-demo-go listening on 0.0.0.0:8080 (HTTP/SSE)
+    # Server: mcp-server-demo-go v1.1.0 starting...
+    # Transport: Streamable HTTP (MCP spec 2025-03-26)
+    # Server listening on 0.0.0.0:8080
     ```
 
 
 ### Test (Locally)
 
-**For HTTP/SSE mode:**
+**For HTTP mode:**
 
 The server exposes multiple endpoints. You can verify the server is running:
 
 ```bash
 # Test health check endpoint
 curl http://localhost:8080/health
-# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.1.0"}
 
 # Test Kubernetes-style health check
 curl http://localhost:8080/healthz
-# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.0.3"}
+# Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.1.0"}
 
-# Test SSE endpoint (for MCP protocol)
-curl -I http://localhost:8080/sse
-# Should return 405 Method Not Allowed (HEAD not supported for SSE)
+# Test MCP endpoint (Streamable HTTP transport)
+curl -X GET http://localhost:8080/mcp
+# MCP protocol communication (requires proper MCP client)
 ```
 
-To interact with the MCP server, use an MCP-compatible client that supports SSE transport, such as:
-- The official MCP SDKs (Python, TypeScript, Go)
-- Custom clients implementing the [MCP SSE transport specification](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports)
+To interact with the MCP server, use an MCP-compatible client that supports Streamable HTTP transport:
+- The built-in test clients (Go/Python) included in this repository
+- The official MCP SDKs with Streamable HTTP support (Go SDK v1.1.0+, Python SDK v1.21.2+)
+- Custom clients implementing the [MCP Streamable HTTP specification (2025-03-26)](https://spec.modelcontextprotocol.io/)
 
-**Example with MCP Python SDK:**
-```python
-from mcp import ClientSession, SSEClientTransport
+**Example with built-in Go test client:**
+```bash
+cd go-server
+./testclient -i -url http://localhost:8080/mcp
+```
 
-async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as session:
-    result = await session.call_tool("timeserver", arguments={})
-    print(result)
+**Example with MCP Go SDK:**
+```go
+import "github.com/modelcontextprotocol/go-sdk/mcp"
+
+transport := &mcp.StreamableClientTransport{
+    Endpoint: "http://localhost:8080/mcp",
+    MaxRetries: 3,
+}
+session, err := client.Connect(ctx, transport, nil)
 ```
 
 **For stdio mode:** Use with MCP clients that support stdio transport (like the official mcp-cli with command transport)
@@ -227,21 +243,24 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
     docker build -t mcp-server-demo-go:latest .
     ```
 
-2.  **Run the Docker Container (HTTP/SSE mode - default):**
+2.  **Run the Docker Container (HTTP mode - default):**
 
     ```bash
     docker run -d -p 8080:8080 --name go-mcp mcp-server-demo-go:latest
-    # Server runs in HTTP/SSE mode by default in Docker
+    # Server runs in HTTP mode (Streamable HTTP transport) by default in Docker
     ```
 
 3.  **Verify the container is running:**
 
     ```bash
     docker logs go-mcp
-    # Should show: mcp-server-demo-go listening on 0.0.0.0:8080 (HTTP/SSE)
+    # Should show:
+    # mcp-server-demo-go v1.1.0 starting...
+    # Transport: Streamable HTTP (MCP spec 2025-03-26)
+    # Server listening on 0.0.0.0:8080
 
-    curl -I http://localhost:8080/sse
-    # Should return 200 OK
+    curl http://localhost:8080/health
+    # Should return: {"status":"ok","service":"mcp-server-demo-go","version":"v1.1.0"}
     ```
 
 4.  **Run in stdio mode (if needed):**
@@ -293,44 +312,55 @@ async with ClientSession(SSEClientTransport("http://localhost:8080/sse")) as ses
     # Output: INFO - mcp-server-demo-python running in stdio mode
     ```
 
-    **HTTP/SSE mode (for network access):**
+    **HTTP mode (Streamable HTTP for network access):**
     ```bash
     python3 mcp_server.py --mode=http --host=0.0.0.0 --port=8080
-    # Output: INFO - mcp-server-demo-python listening on 0.0.0.0:8080 (HTTP/SSE)
+    # Output:
+    # INFO - mcp-server-demo-python v1.1.0 starting...
+    # INFO - Transport: Streamable HTTP (MCP spec 2025-03-26)
+    # INFO - Server listening on 0.0.0.0:8080
     ```
 
 
 ### Test (Locally)
 
-**For HTTP/SSE mode:**
+**For HTTP mode:**
 
 The server exposes multiple endpoints. You can verify the server is running:
 
 ```bash
 # Test health check endpoint
 curl http://localhost:8080/health
-# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.3"}
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.1.0"}
 
 # Test Kubernetes-style health check
 curl http://localhost:8080/healthz
-# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.0.3"}
+# Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.1.0"}
 
-# Test SSE endpoint (for MCP protocol)
-curl -I http://localhost:8080/sse
-# Should return 200 OK with SSE headers
+# Test MCP endpoint (Streamable HTTP transport)
+curl -X GET http://localhost:8080/mcp
+# MCP protocol communication (requires proper MCP client)
 ```
 
-To interact with the MCP server, use an MCP-compatible client that supports SSE transport, such as:
-- The official MCP SDKs (Python, TypeScript, Go)
-- Custom clients implementing the [MCP SSE transport specification](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports)
+To interact with the MCP server, use an MCP-compatible client that supports Streamable HTTP transport:
+- The built-in test clients (Go/Python) included in this repository
+- The official MCP SDKs with Streamable HTTP support (Go SDK v1.1.0+, Python SDK v1.21.2+)
+- Custom clients implementing the [MCP Streamable HTTP specification (2025-03-26)](https://spec.modelcontextprotocol.io/)
+
+**Example with built-in Python test client:**
+```bash
+cd python-server
+python3 cmd/testclient/testclient.py -i -url http://localhost:8080/mcp
+```
 
 **Example with MCP Python SDK:**
 ```python
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.sse import sse_client
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 
-async with sse_client("http://localhost:8080/sse") as (read, write):
+async with streamablehttp_client("http://localhost:8080/mcp") as (read, write):
     async with ClientSession(read, write) as session:
+        await session.initialize()
         result = await session.call_tool("timeserver", arguments={})
         print(result)
 ```
@@ -347,21 +377,24 @@ async with sse_client("http://localhost:8080/sse") as (read, write):
     docker build -t mcp-server-demo-python:latest .
     ```
 
-2.  **Run the Docker Container (HTTP/SSE mode - default):**
+2.  **Run the Docker Container (HTTP mode - default):**
 
     ```bash
     docker run -d -p 8080:8080 --name py-mcp mcp-server-demo-python:latest
-    # Server runs in HTTP/SSE mode by default in Docker
+    # Server runs in HTTP mode (Streamable HTTP transport) by default in Docker
     ```
 
 3.  **Verify the container is running:**
 
     ```bash
     docker logs py-mcp
-    # Should show: mcp-server-demo-python listening on 0.0.0.0:8080 (HTTP/SSE)
+    # Should show:
+    # INFO - mcp-server-demo-python v1.1.0 starting...
+    # INFO - Transport: Streamable HTTP (MCP spec 2025-03-26)
+    # INFO - Server listening on 0.0.0.0:8080
 
-    curl -I http://localhost:8080/sse
-    # Should return 200 OK
+    curl http://localhost:8080/health
+    # Should return: {"status":"ok","service":"mcp-server-demo-python","version":"v1.1.0"}
     ```
 
 4.  **Run in stdio mode (if needed):**
@@ -388,7 +421,7 @@ For production deployments, it's recommended to use semantic versioning and push
 cd go-server
 
 # Set version and registry configuration
-VERSION=v1.0.3
+VERSION=v1.1.0
 REGISTRY_USER=yourusername              # For Docker Hub
 # REGISTRY=gcr.io/your-project-id       # For GCR
 # REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
@@ -412,7 +445,7 @@ docker tag mcp-server-demo-go:latest ${REGISTRY_USER}/mcp-server-demo-go:latest
 cd python-server
 
 # Set version and registry configuration
-VERSION=v1.0.3
+VERSION=v1.1.0
 REGISTRY_USER=yourusername              # For Docker Hub
 # REGISTRY=gcr.io/your-project-id       # For GCR
 # REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com  # For ECR
@@ -540,7 +573,7 @@ Edit the manifest files to use your registry images:
 ```bash
 # Set your registry and version
 REGISTRY_USER=yourusername
-VERSION=v1.0.3
+VERSION=v1.1.0
 
 # For go-server-deployment.yaml, change:
 # image: mcp-server-demo-go:latest
@@ -608,20 +641,20 @@ mcp-server-demo-python-xxxxxxxxxx-xxxx  1/1     Running   0          30s
 kubectl port-forward svc/mcp-server-demo-go 8080:8080
 
 # In another terminal, test the server
-curl -I http://localhost:8080/sse
+curl http://localhost:8080/health
 # Should return 200 OK
 
 # Test with built-in test client
 cd go-server
-./testclient -tool timeserver -args '{}' -url http://localhost:8080/sse
+./testclient -tool timeserver -args '{}' -url http://localhost:8080/mcp
 
 # Forward Python server port (use a different local port)
 kubectl port-forward svc/mcp-server-demo-python 8081:8080
 
 # Test Python server
-curl -I http://localhost:8081/sse
+curl http://localhost:8081/health
 cd python-server
-python3 cmd/testclient/testclient.py -tool timeserver -args '{}' -url http://localhost:8081/sse
+python3 cmd/testclient/testclient.py -tool timeserver -args '{}' -url http://localhost:8081/mcp
 ```
 
 **Method 2: From within the cluster (create a test pod)**
@@ -631,8 +664,8 @@ python3 cmd/testclient/testclient.py -tool timeserver -args '{}' -url http://loc
 kubectl run test-client --image=curlimages/curl:latest -it --rm --restart=Never -- sh
 
 # Inside the pod, test the services
-curl -I http://mcp-server-demo-go:8080/sse
-curl -I http://mcp-server-demo-python:8080/sse
+curl http://mcp-server-demo-go:8080/health
+curl http://mcp-server-demo-python:8080/health
 ```
 
 **Method 3: Using Ingress (External Access)**
@@ -651,11 +684,11 @@ minikube ip
 
 # Test with Ingress (update /etc/hosts to point domain to Minikube IP)
 # Add line: <minikube-ip> mcp-demo.example.com mcp-go.example.com mcp-python.example.com
-curl -I http://mcp-go.example.com/sse
-curl -I http://mcp-python.example.com/sse
+curl http://mcp-go.example.com/health
+curl http://mcp-python.example.com/health
 
 # Or use the test clients
-./testclient -tool timeserver -args '{}' -url http://mcp-go.example.com/sse
+./testclient -tool timeserver -args '{}' -url http://mcp-go.example.com/mcp
 ```
 
 **Method 4: Interactive Testing**
@@ -666,7 +699,7 @@ kubectl port-forward svc/mcp-server-demo-go 8080:8080
 
 # In another terminal
 cd go-server
-./testclient -i -url http://localhost:8080/sse
+./testclient -i -url http://localhost:8080/mcp
 
 # Interactive commands:
 mcp> list
@@ -779,7 +812,7 @@ kubectl get endpoints mcp-server-demo-go
 kubectl get pods -l app=mcp-server-demo-go
 
 # Test service from within cluster
-kubectl run test --image=curlimages/curl -it --rm --restart=Never -- curl http://mcp-server-demo-go:8080/sse
+kubectl run test --image=curlimages/curl -it --rm --restart=Never -- curl http://mcp-server-demo-go:8080/mcp
 ```
 
 #### Cleanup
@@ -1006,7 +1039,7 @@ kubectl port-forward svc/mcp-go-mcp-server-go 8080:8080
 
 # In another terminal, test with the test client
 cd go-server
-./testclient -i -url http://localhost:8080/sse
+./testclient -i -url http://localhost:8080/mcp
 ```
 
 #### Packaging and Distributing Helm Charts
@@ -1043,7 +1076,7 @@ replicaCount: 3
 
 image:
   repository: your-registry.io/mcp-server-demo-go
-  tag: "v1.0.3"
+  tag: "v1.1.0"
   pullPolicy: Always
 
 imagePullSecrets:
