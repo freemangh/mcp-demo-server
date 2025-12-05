@@ -67,6 +67,7 @@ GO_ONLY=false
 PYTHON_ONLY=false
 SERVERS_ONLY=false
 CLIENTS_ONLY=false
+POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -93,11 +94,19 @@ while [[ $# -gt 0 ]]; do
             CLIENTS_ONLY=true
             shift
             ;;
+        -*)
+            print_error "Unknown option: $1"
+            usage
+            ;;
         *)
-            break
+            POSITIONAL_ARGS+=("$1")
+            shift
             ;;
     esac
 done
+
+# Restore positional arguments
+set -- "${POSITIONAL_ARGS[@]}"
 
 # Check arguments
 if [ $# -lt 1 ]; then
