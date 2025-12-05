@@ -55,8 +55,10 @@ DOCKER_USERNAME=myusername DOCKER_PASSWORD=mytoken ./build-and-push.sh v1.1.0
 |--------|-------------|
 | `-h, --help` | Show help message |
 | `--no-push` | Build images locally but don't push to registry |
-| `--go-only` | Build only the Go server image |
-| `--python-only` | Build only the Python server image |
+| `--go-only` | Build only Go images (server + test client) |
+| `--python-only` | Build only Python images (server + test client) |
+| `--servers-only` | Build only server images (no test clients) |
+| `--clients-only` | Build only test client images (no servers) |
 
 ### Environment Variables
 
@@ -67,9 +69,9 @@ DOCKER_USERNAME=myusername DOCKER_PASSWORD=mytoken ./build-and-push.sh v1.1.0
 
 ## Usage Examples
 
-### Example 1: Build and Push Both Images
+### Example 1: Build and Push All Images
 
-Build both Go and Python servers with version `v1.1.0`:
+Build all Go and Python images (servers + test clients) with version `v1.1.0`:
 
 ```bash
 ./build-and-push.sh v1.1.0
@@ -78,22 +80,38 @@ Build both Go and Python servers with version `v1.1.0`:
 **Output:**
 - `username/mcp-server-demo-go:1.1.0`
 - `username/mcp-server-demo-go:latest`
+- `username/mcp-testclient-go:1.1.0`
+- `username/mcp-testclient-go:latest`
 - `username/mcp-server-demo-python:1.1.0`
 - `username/mcp-server-demo-python:latest`
+- `username/mcp-testclient-python:1.1.0`
+- `username/mcp-testclient-python:latest`
 
-### Example 2: Build Only Go Server
+### Example 2: Build Only Go Images
 
 ```bash
 ./build-and-push.sh v1.1.0 --go-only
 ```
 
-### Example 3: Build Only Python Server
+### Example 3: Build Only Python Images
 
 ```bash
 ./build-and-push.sh v1.1.0 --python-only
 ```
 
-### Example 4: Build Locally Without Pushing
+### Example 4: Build Only Servers (No Test Clients)
+
+```bash
+./build-and-push.sh v1.1.0 --servers-only
+```
+
+### Example 5: Build Only Test Clients (No Servers)
+
+```bash
+./build-and-push.sh v1.1.0 --clients-only
+```
+
+### Example 6: Build Locally Without Pushing
 
 Test builds without pushing to Docker Hub:
 
@@ -101,7 +119,7 @@ Test builds without pushing to Docker Hub:
 ./build-and-push.sh v1.1.0 --no-push
 ```
 
-### Example 5: Automated CI/CD Pipeline
+### Example 7: Automated CI/CD Pipeline
 
 ```bash
 # Using token for non-interactive authentication
@@ -110,10 +128,18 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 ./build-and-push.sh v1.1.0
 ```
 
-### Example 6: Build with Different Username
+### Example 8: Build with Different Username
 
 ```bash
 ./build-and-push.sh v1.1.0 myorganization
+```
+
+### Example 9: Combine Options
+
+Build only Go server (no client, no Python):
+
+```bash
+./build-and-push.sh v1.1.0 --go-only --servers-only
 ```
 
 ## What the Script Does
@@ -126,7 +152,9 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 
 ### 2. **Building**
 - 🔨 Builds Go server Docker image
+- 🔨 Builds Go test client Docker image
 - 🔨 Builds Python server Docker image
+- 🔨 Builds Python test client Docker image
 - 🏷️ Tags with version (e.g., `1.1.0`)
 - 🏷️ Tags as `latest`
 
@@ -148,11 +176,12 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 [INFO] ================================
 [INFO] Version: 1.1.0
 [INFO] Docker Hub User: myusername
-[INFO] Go Image: myusername/mcp-server-demo-go:1.1.0
-[INFO] Python Image: myusername/mcp-server-demo-python:1.1.0
 [INFO] Push to Registry: YES
-[INFO] Build Go: YES
-[INFO] Build Python: YES
+[INFO] --------------------------------
+[INFO] Build Go Server: YES
+[INFO] Build Go Client: YES
+[INFO] Build Python Server: YES
+[INFO] Build Python Client: YES
 [INFO] ================================
 
 [SUCCESS] Already logged in to Docker Hub
@@ -162,24 +191,28 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 [INFO] ================================
 [INFO] Building myusername/mcp-server-demo-go:1.1.0...
 [SUCCESS] Built myusername/mcp-server-demo-go:1.1.0
-[INFO] Tagging myusername/mcp-server-demo-go:latest...
-[SUCCESS] Tagged myusername/mcp-server-demo-go:latest
-[INFO] Pushing myusername/mcp-server-demo-go:1.1.0 to Docker Hub...
-[SUCCESS] Pushed myusername/mcp-server-demo-go:1.1.0
-[INFO] Pushing myusername/mcp-server-demo-go:latest to Docker Hub...
-[SUCCESS] Pushed myusername/mcp-server-demo-go:latest
+...
+
+[INFO] ================================
+[INFO] Building Go Test Client
+[INFO] ================================
+[INFO] Building myusername/mcp-testclient-go:1.1.0...
+[SUCCESS] Built myusername/mcp-testclient-go:1.1.0
+...
 
 [INFO] ================================
 [INFO] Building Python Server
 [INFO] ================================
 [INFO] Building myusername/mcp-server-demo-python:1.1.0...
 [SUCCESS] Built myusername/mcp-server-demo-python:1.1.0
-[INFO] Tagging myusername/mcp-server-demo-python:latest...
-[SUCCESS] Tagged myusername/mcp-server-demo-python:latest
-[INFO] Pushing myusername/mcp-server-demo-python:1.1.0 to Docker Hub...
-[SUCCESS] Pushed myusername/mcp-server-demo-python:1.1.0
-[INFO] Pushing myusername/mcp-server-demo-python:latest to Docker Hub...
-[SUCCESS] Pushed myusername/mcp-server-demo-python:latest
+...
+
+[INFO] ================================
+[INFO] Building Python Test Client
+[INFO] ================================
+[INFO] Building myusername/mcp-testclient-python:1.1.0...
+[SUCCESS] Built myusername/mcp-testclient-python:1.1.0
+...
 
 [INFO] ================================
 [SUCCESS] Build Complete!
@@ -187,9 +220,15 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 [INFO] Go Server Images:
 [INFO]   - myusername/mcp-server-demo-go:1.1.0
 [INFO]   - myusername/mcp-server-demo-go:latest
+[INFO] Go Test Client Images:
+[INFO]   - myusername/mcp-testclient-go:1.1.0
+[INFO]   - myusername/mcp-testclient-go:latest
 [INFO] Python Server Images:
 [INFO]   - myusername/mcp-server-demo-python:1.1.0
 [INFO]   - myusername/mcp-server-demo-python:latest
+[INFO] Python Test Client Images:
+[INFO]   - myusername/mcp-testclient-python:1.1.0
+[INFO]   - myusername/mcp-testclient-python:latest
 
 [SUCCESS] All images have been pushed to Docker Hub!
 [INFO] View your images at: https://hub.docker.com/u/myusername
@@ -197,8 +236,10 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 [INFO] Usage examples:
 [INFO]   docker pull myusername/mcp-server-demo-go:1.1.0
 [INFO]   docker run -p 8080:8080 myusername/mcp-server-demo-go:1.1.0
+[INFO]   docker run --rm -it myusername/mcp-testclient-go:1.1.0 -url http://host.docker.internal:8080/mcp
 [INFO]   docker pull myusername/mcp-server-demo-python:1.1.0
 [INFO]   docker run -p 8080:8080 myusername/mcp-server-demo-python:1.1.0
+[INFO]   docker run --rm -it myusername/mcp-testclient-python:1.1.0 -url http://host.docker.internal:8080/mcp
 
 [SUCCESS] Done! 🚀
 ```
@@ -210,8 +251,18 @@ DOCKER_PASSWORD=dckr_pat_abc123... \
 - **Tags**: `<version>`, `latest`
 - **Size**: ~20 MB (distroless base)
 
+### Go Test Client
+- **Repository**: `<username>/mcp-testclient-go`
+- **Tags**: `<version>`, `latest`
+- **Size**: ~15 MB (distroless base)
+
 ### Python Server
 - **Repository**: `<username>/mcp-server-demo-python`
+- **Tags**: `<version>`, `latest`
+- **Size**: ~150 MB (python:3.11-slim base)
+
+### Python Test Client
+- **Repository**: `<username>/mcp-testclient-python`
 - **Tags**: `<version>`, `latest`
 - **Size**: ~150 MB (python:3.11-slim base)
 
@@ -230,6 +281,23 @@ docker run -p 8080:8080 myusername/mcp-server-demo-go:1.1.0
 curl http://localhost:8080/health
 ```
 
+### Go Test Client
+
+```bash
+# Pull the image
+docker pull myusername/mcp-testclient-go:1.1.0
+
+# Run interactive mode against a local server
+# Use host.docker.internal to reach host machine from container
+docker run --rm -it myusername/mcp-testclient-go:1.1.0 -i -url http://host.docker.internal:8080/mcp
+
+# Run single command
+docker run --rm myusername/mcp-testclient-go:1.1.0 -tool timeserver -args '{"timezone":"UTC"}' -url http://host.docker.internal:8080/mcp
+
+# Connect to a server on a Docker network
+docker run --rm -it --network my-network myusername/mcp-testclient-go:1.1.0 -i -url http://mcp-server:8080/mcp
+```
+
 ### Python Server
 
 ```bash
@@ -241,6 +309,35 @@ docker run -p 8080:8080 myusername/mcp-server-demo-python:1.1.0
 
 # Test the server
 curl http://localhost:8080/health
+```
+
+### Python Test Client
+
+```bash
+# Pull the image
+docker pull myusername/mcp-testclient-python:1.1.0
+
+# Run interactive mode against a local server
+docker run --rm -it myusername/mcp-testclient-python:1.1.0 -i -url http://host.docker.internal:8080/mcp
+
+# Run single command
+docker run --rm myusername/mcp-testclient-python:1.1.0 -tool fetch -args '{"url":"https://httpbin.org/json"}' -url http://host.docker.internal:8080/mcp
+
+# Connect to a server on a Docker network
+docker run --rm -it --network my-network myusername/mcp-testclient-python:1.1.0 -i -url http://mcp-server:8080/mcp
+```
+
+### Using Server and Client Together
+
+```bash
+# Create a Docker network
+docker network create mcp-net
+
+# Run the server
+docker run -d --name mcp-server --network mcp-net -p 8080:8080 myusername/mcp-server-demo-go:1.1.0
+
+# Run the client to connect to the server
+docker run --rm -it --network mcp-net myusername/mcp-testclient-go:1.1.0 -i -url http://mcp-server:8080/mcp
 ```
 
 ## CI/CD Integration

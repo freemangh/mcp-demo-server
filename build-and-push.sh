@@ -50,10 +50,12 @@ Examples:
   DOCKER_USERNAME=user $0 1.1.0  # Uses environment variable
 
 Options:
-  -h, --help       Show this help message
-  --no-push        Build images but don't push to registry
-  --go-only        Build only Go server
-  --python-only    Build only Python server
+  -h, --help         Show this help message
+  --no-push          Build images but don't push to registry
+  --go-only          Build only Go server/client
+  --python-only      Build only Python server/client
+  --servers-only     Build only server images (no test clients)
+  --clients-only     Build only test client images (no servers)
 
 EOF
     exit 1
@@ -63,6 +65,8 @@ EOF
 NO_PUSH=false
 GO_ONLY=false
 PYTHON_ONLY=false
+SERVERS_ONLY=false
+CLIENTS_ONLY=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -79,6 +83,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --python-only)
             PYTHON_ONLY=true
+            shift
+            ;;
+        --servers-only)
+            SERVERS_ONLY=true
+            shift
+            ;;
+        --clients-only)
+            CLIENTS_ONLY=true
             shift
             ;;
         *)
@@ -102,6 +114,8 @@ VERSION_TAG=${VERSION#v}
 # Docker image names
 GO_IMAGE_NAME="mcp-server-demo-go"
 PYTHON_IMAGE_NAME="mcp-server-demo-python"
+GO_CLIENT_IMAGE_NAME="mcp-testclient-go"
+PYTHON_CLIENT_IMAGE_NAME="mcp-testclient-python"
 
 # Get Docker username if not provided
 if [ -z "$DOCKER_USERNAME" ]; then
@@ -118,6 +132,31 @@ fi
 # Full image names with registry
 GO_IMAGE_FULL="${DOCKER_USERNAME}/${GO_IMAGE_NAME}"
 PYTHON_IMAGE_FULL="${DOCKER_USERNAME}/${PYTHON_IMAGE_NAME}"
+GO_CLIENT_IMAGE_FULL="${DOCKER_USERNAME}/${GO_CLIENT_IMAGE_NAME}"
+PYTHON_CLIENT_IMAGE_FULL="${DOCKER_USERNAME}/${PYTHON_CLIENT_IMAGE_NAME}"
+
+# Determine what to build
+BUILD_GO_SERVER=true
+BUILD_PYTHON_SERVER=true
+BUILD_GO_CLIENT=true
+BUILD_PYTHON_CLIENT=true
+
+if [ "$PYTHON_ONLY" = true ]; then
+    BUILD_GO_SERVER=false
+    BUILD_GO_CLIENT=false
+fi
+if [ "$GO_ONLY" = true ]; then
+    BUILD_PYTHON_SERVER=false
+    BUILD_PYTHON_CLIENT=false
+fi
+if [ "$SERVERS_ONLY" = true ]; then
+    BUILD_GO_CLIENT=false
+    BUILD_PYTHON_CLIENT=false
+fi
+if [ "$CLIENTS_ONLY" = true ]; then
+    BUILD_GO_SERVER=false
+    BUILD_PYTHON_SERVER=false
+fi
 
 # Print configuration
 print_info "================================"
@@ -125,11 +164,12 @@ print_info "Docker Build & Push Configuration"
 print_info "================================"
 print_info "Version: ${VERSION_TAG}"
 print_info "Docker Hub User: ${DOCKER_USERNAME}"
-print_info "Go Image: ${GO_IMAGE_FULL}:${VERSION_TAG}"
-print_info "Python Image: ${PYTHON_IMAGE_FULL}:${VERSION_TAG}"
 print_info "Push to Registry: $([ "$NO_PUSH" = true ] && echo "NO" || echo "YES")"
-print_info "Build Go: $([ "$PYTHON_ONLY" = true ] && echo "NO" || echo "YES")"
-print_info "Build Python: $([ "$GO_ONLY" = true ] && echo "NO" || echo "YES")"
+print_info "--------------------------------"
+print_info "Build Go Server: $([ "$BUILD_GO_SERVER" = true ] && echo "YES" || echo "NO")"
+print_info "Build Go Client: $([ "$BUILD_GO_CLIENT" = true ] && echo "YES" || echo "NO")"
+print_info "Build Python Server: $([ "$BUILD_PYTHON_SERVER" = true ] && echo "YES" || echo "NO")"
+print_info "Build Python Client: $([ "$BUILD_PYTHON_CLIENT" = true ] && echo "YES" || echo "NO")"
 print_info "================================"
 echo
 
@@ -164,13 +204,15 @@ if [ "$NO_PUSH" = false ]; then
 fi
 
 # Function to build and push an image
+# Arguments: BUILD_DIR IMAGE_NAME DISPLAY_NAME [DOCKERFILE]
 build_and_push() {
     local BUILD_DIR=$1
     local IMAGE_NAME=$2
-    local SERVER_NAME=$3
+    local DISPLAY_NAME=$3
+    local DOCKERFILE=${4:-Dockerfile}
 
     print_info "================================"
-    print_info "Building ${SERVER_NAME} Server"
+    print_info "Building ${DISPLAY_NAME}"
     print_info "================================"
 
     # Change to build directory
@@ -178,7 +220,7 @@ build_and_push() {
 
     # Build image with version tag
     print_info "Building ${IMAGE_NAME}:${VERSION_TAG}..."
-    if docker build -t "${IMAGE_NAME}:${VERSION_TAG}" .; then
+    if docker build -f "$DOCKERFILE" -t "${IMAGE_NAME}:${VERSION_TAG}" .; then
         print_success "Built ${IMAGE_NAME}:${VERSION_TAG}"
     else
         print_error "Failed to build ${IMAGE_NAME}:${VERSION_TAG}"
@@ -224,14 +266,24 @@ build_and_push() {
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Build Go server (unless --python-only)
-if [ "$PYTHON_ONLY" = false ]; then
-    build_and_push "${SCRIPT_DIR}/go-server" "${GO_IMAGE_FULL}" "Go"
+# Build Go server
+if [ "$BUILD_GO_SERVER" = true ]; then
+    build_and_push "${SCRIPT_DIR}/go-server" "${GO_IMAGE_FULL}" "Go Server"
 fi
 
-# Build Python server (unless --go-only)
-if [ "$GO_ONLY" = false ]; then
-    build_and_push "${SCRIPT_DIR}/python-server" "${PYTHON_IMAGE_FULL}" "Python"
+# Build Go test client
+if [ "$BUILD_GO_CLIENT" = true ]; then
+    build_and_push "${SCRIPT_DIR}/go-server" "${GO_CLIENT_IMAGE_FULL}" "Go Test Client" "cmd/testclient/Dockerfile"
+fi
+
+# Build Python server
+if [ "$BUILD_PYTHON_SERVER" = true ]; then
+    build_and_push "${SCRIPT_DIR}/python-server" "${PYTHON_IMAGE_FULL}" "Python Server"
+fi
+
+# Build Python test client
+if [ "$BUILD_PYTHON_CLIENT" = true ]; then
+    build_and_push "${SCRIPT_DIR}/python-server" "${PYTHON_CLIENT_IMAGE_FULL}" "Python Test Client" "cmd/testclient/Dockerfile"
 fi
 
 # Print summary
@@ -239,16 +291,28 @@ print_info "================================"
 print_success "Build Complete!"
 print_info "================================"
 
-if [ "$PYTHON_ONLY" = false ]; then
+if [ "$BUILD_GO_SERVER" = true ]; then
     print_info "Go Server Images:"
     print_info "  - ${GO_IMAGE_FULL}:${VERSION_TAG}"
     print_info "  - ${GO_IMAGE_FULL}:latest"
 fi
 
-if [ "$GO_ONLY" = false ]; then
+if [ "$BUILD_GO_CLIENT" = true ]; then
+    print_info "Go Test Client Images:"
+    print_info "  - ${GO_CLIENT_IMAGE_FULL}:${VERSION_TAG}"
+    print_info "  - ${GO_CLIENT_IMAGE_FULL}:latest"
+fi
+
+if [ "$BUILD_PYTHON_SERVER" = true ]; then
     print_info "Python Server Images:"
     print_info "  - ${PYTHON_IMAGE_FULL}:${VERSION_TAG}"
     print_info "  - ${PYTHON_IMAGE_FULL}:latest"
+fi
+
+if [ "$BUILD_PYTHON_CLIENT" = true ]; then
+    print_info "Python Test Client Images:"
+    print_info "  - ${PYTHON_CLIENT_IMAGE_FULL}:${VERSION_TAG}"
+    print_info "  - ${PYTHON_CLIENT_IMAGE_FULL}:latest"
 fi
 
 if [ "$NO_PUSH" = false ]; then
@@ -262,13 +326,19 @@ fi
 
 echo
 print_info "Usage examples:"
-if [ "$PYTHON_ONLY" = false ]; then
+if [ "$BUILD_GO_SERVER" = true ]; then
     print_info "  docker pull ${GO_IMAGE_FULL}:${VERSION_TAG}"
     print_info "  docker run -p 8080:8080 ${GO_IMAGE_FULL}:${VERSION_TAG}"
 fi
-if [ "$GO_ONLY" = false ]; then
+if [ "$BUILD_GO_CLIENT" = true ]; then
+    print_info "  docker run --rm -it ${GO_CLIENT_IMAGE_FULL}:${VERSION_TAG} -url http://host.docker.internal:8080/mcp"
+fi
+if [ "$BUILD_PYTHON_SERVER" = true ]; then
     print_info "  docker pull ${PYTHON_IMAGE_FULL}:${VERSION_TAG}"
     print_info "  docker run -p 8080:8080 ${PYTHON_IMAGE_FULL}:${VERSION_TAG}"
+fi
+if [ "$BUILD_PYTHON_CLIENT" = true ]; then
+    print_info "  docker run --rm -it ${PYTHON_CLIENT_IMAGE_FULL}:${VERSION_TAG} -url http://host.docker.internal:8080/mcp"
 fi
 
 echo
